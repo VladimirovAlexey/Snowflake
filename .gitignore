@@ -1,0 +1,11 @@
+#.out files produced by fortrat
+a.out
+*.out
+*.mod
+*.o
+
+# result of python compilation
+*.so
+
+#linux trash
+.nfs*

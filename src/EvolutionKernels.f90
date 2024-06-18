@@ -608,7 +608,7 @@ end function
 
 !!!! All functions have the same interface
 !!!! F is the initial boundary condition as the vector in S-space
-!!!! alphs is the a(t) is alphas(log mu)
+!!!! alpha is the a(t) is alpha_s/4pi(log mu^2)
 !!!! t0, t1 are initial and final scales of evolution
 !!!! nf is the active number of flavors
 !!!! output is placed into F0
@@ -627,7 +627,6 @@ subroutine EvNonSinglet(F,alpha,t0,t1)
     RGh=(t1-t0)/numSteps
 
     tn=t0
-
     do i=1,numSteps
         !!! the factor -1 is the factor in the evolution equation
 
@@ -655,7 +654,6 @@ subroutine EvSingletPLUS(F,Fg,alpha,t0,t1,nf)
     numSteps=int((t1-t0)/RGh_max)+1
     RGh=(t1-t0)/numSteps
     tn=t0
-
     do i=1,numSteps
         !!! the factor -1 is the factor in the evolution equation
         k1=-RGh*alpha(tn)*(HxF(Hqq,F)+Nf*(HxF(Hqq_J,F)+HxF(Hqg_PLUS,Fg)))

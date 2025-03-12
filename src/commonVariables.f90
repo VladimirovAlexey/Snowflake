@@ -3,6 +3,8 @@ integer, parameter :: dp = selected_real_kind(15, 307)
 
 !!!! Print initialization information
 logical::showINI=.false.
+!!!! Print initialization information
+logical::showPROCESS=.false.
 
 !!!! GRID type is defined in the top of the HexGrid.f90
 

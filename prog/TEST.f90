@@ -10,13 +10,15 @@ implicit none
 
 real*8::t1,t2
 !$ real*8::omp_get_wtime
-real*8::x1,x2,x3
+real*8::x1,x2,x3,Q
 
 call  SnowFlake_Initialize("TEST.ini","prog/")
 
+Q=25.d0
+
 call cpu_time(t1)
 !$ t1=omp_get_wtime()
-call ComputeEvolution(1.d0,25d0,alpha,U1=initialF,U2=initialA,G1=initialG,inputQ="T",inputG="T")
+call ComputeEvolution(1.d0,Q,alpha,U1=initialF,U2=initialA,G1=initialG,inputQ="T",inputG="T")
 
 call cpu_time(t2)
 !$ t2=omp_get_wtime()
@@ -30,22 +32,22 @@ x1=0.3d0
 x2=-0.4d0
 x3=-x1-x2
 write(*,'("(",F4.2,",",F4.2,",",F4.2,") | ",F12.5," | ",F12.5,"|| ",F12.5," | ",F12.5)') x1,x2,x3, &
-initialF(x1,x2),GetPDF(x1,x2,2,outputT='T'),initialA(x1,x2),GetPDF(x1,x2,-2,outputT='T')
+initialF(x1,x2),GetPDF(x1,x2,Q,2,outputT='T'),initialA(x1,x2),GetPDF(x1,x2,Q,-2,outputT='T')
 x1=-0.1d0
 x2=.4d0
 x3=-x1-x2
 write(*,'("(",F4.2,",",F4.2,",",F4.2,") | ",F12.5," | ",F12.5,"|| ",F12.5," | ",F12.5)') x1,x2,x3, &
-initialF(x1,x2),GetPDF(x1,x2,2,outputT='T'),initialA(x1,x2),GetPDF(x1,x2,-2,outputT='T')
+initialF(x1,x2),GetPDF(x1,x2,Q,2,outputT='T'),initialA(x1,x2),GetPDF(x1,x2,Q,-2,outputT='T')
 x1=0.45d0
 x2=0.00d0
 x3=-x1-x2
 write(*,'("(",F4.2,",",F4.2,",",F4.2,") | ",F12.5," | ",F12.5,"|| ",F12.5," | ",F12.5)') x1,x2,x3, &
-initialF(x1,x2),GetPDF(x1,x2,2,outputT='T'),initialA(x1,x2),GetPDF(x1,x2,-2,outputT='T')
+initialF(x1,x2),GetPDF(x1,x2,Q,2,outputT='T'),initialA(x1,x2),GetPDF(x1,x2,Q,-2,outputT='T')
 x1=0.012d0
 x2=0.00d0
 x3=-x1-x2
 write(*,'("(",F4.2,",",F4.2,",",F4.2,") | ",F12.5," | ",F12.5,"|| ",F12.5," | ",F12.5)') x1,x2,x3, &
-initialF(x1,x2),GetPDF(x1,x2,2,outputT='T'),initialA(x1,x2),GetPDF(x1,x2,-2,outputT='T')
+initialF(x1,x2),GetPDF(x1,x2,Q,2,outputT='T'),initialA(x1,x2),GetPDF(x1,x2,Q,-2,outputT='T')
 write(*,*) "----------------------------------------------------------------------------"
 write(*,*) "                |    D-QUARK  T(x1,x2,x3)    ||    D-QUARK  deltaT(x1,x2,x3)"
 write(*,*) "   (x1,x2,x3)   |  1 GeV       | 25 GeV      ||   1 GeV      | 25 GeV     "
@@ -53,22 +55,22 @@ x1=0.3d0
 x2=-0.4d0
 x3=-x1-x2
 write(*,'("(",F4.2,",",F4.2,",",F4.2,") | ",F12.5," | ",F12.5,"|| ",F12.5," | ",F12.5)') x1,x2,x3, &
-0.d0,GetPDF(x1,x2,1,outputT='T'),0.d0,GetPDF(x1,x2,-1,outputT='T')
+0.d0,GetPDF(x1,x2,Q,1,outputT='T'),0.d0,GetPDF(x1,x2,Q,-1,outputT='T')
 x1=-0.1d0
 x2=.4d0
 x3=-x1-x2
 write(*,'("(",F4.2,",",F4.2,",",F4.2,") | ",F12.5," | ",F12.5,"|| ",F12.5," | ",F12.5)') x1,x2,x3, &
-0.d0,GetPDF(x1,x2,1,outputT='T'),0.d0,GetPDF(x1,x2,-1,outputT='T')
+0.d0,GetPDF(x1,x2,Q,1,outputT='T'),0.d0,GetPDF(x1,x2,Q,-1,outputT='T')
 x1=0.45d0
 x2=0.00d0
 x3=-x1-x2
 write(*,'("(",F4.2,",",F4.2,",",F4.2,") | ",F12.5," | ",F12.5,"|| ",F12.5," | ",F12.5)') x1,x2,x3, &
-0.d0,GetPDF(x1,x2,1,outputT='T'),0.d0,GetPDF(x1,x2,-1,outputT='T')
+0.d0,GetPDF(x1,x2,Q,1,outputT='T'),0.d0,GetPDF(x1,x2,Q,-1,outputT='T')
 x1=0.012d0
 x2=0.00d0
 x3=-x1-x2
 write(*,'("(",F4.2,",",F4.2,",",F4.2,") | ",F12.5," | ",F12.5,"|| ",F12.5," | ",F12.5)') x1,x2,x3, &
-0.d0,GetPDF(x1,x2,1,outputT='T'),0.d0,GetPDF(x1,x2,-1,outputT='T')
+0.d0,GetPDF(x1,x2,Q,1,outputT='T'),0.d0,GetPDF(x1,x2,Q,-1,outputT='T')
 write(*,*) "----------------------------------------------------------------------------"
 write(*,*) "                |    Gluon T_{F+}(x1,x2,x3)  ||   Gluon T_{F-}(x1,x2,x3)"
 write(*,*) "   (x1,x2,x3)   |  1 GeV       | 25 GeV      ||   1 GeV      | 25 GeV     "
@@ -76,22 +78,22 @@ x1=0.3d0
 x2=-0.4d0
 x3=-x1-x2
 write(*,'("(",F4.2,",",F4.2,",",F4.2,") | ",F12.5," | ",F12.5,"|| ",F12.5," | ",F12.5)') x1,x2,x3, &
-initialG(x1,x2),GetPDF(x1,x2,0,outputT='T'),0.d0,GetPDF(x1,x2,-10,outputT='T')
+initialG(x1,x2),GetPDF(x1,x2,Q,0,outputT='T'),0.d0,GetPDF(x1,x2,Q,-10,outputT='T')
 x1=-0.1d0
 x2=.4d0
 x3=-x1-x2
 write(*,'("(",F4.2,",",F4.2,",",F4.2,") | ",F12.5," | ",F12.5,"|| ",F12.5," | ",F12.5)') x1,x2,x3, &
-initialG(x1,x2),GetPDF(x1,x2,0,outputT='T'),0.d0,GetPDF(x1,x2,-10,outputT='T')
+initialG(x1,x2),GetPDF(x1,x2,Q,0,outputT='T'),0.d0,GetPDF(x1,x2,Q,-10,outputT='T')
 x1=0.45d0
 x2=0.00d0
 x3=-x1-x2
 write(*,'("(",F4.2,",",F4.2,",",F4.2,") | ",F12.5," | ",F12.5,"|| ",F12.5," | ",F12.5)') x1,x2,x3, &
-initialG(x1,x2),GetPDF(x1,x2,0,outputT='T'),0.d0,GetPDF(x1,x2,-10,outputT='T')
+initialG(x1,x2),GetPDF(x1,x2,Q,0,outputT='T'),0.d0,GetPDF(x1,x2,Q,-10,outputT='T')
 x1=0.012d0
 x2=0.00d0
 x3=-x1-x2
 write(*,'("(",F4.2,",",F4.2,",",F4.2,") | ",F12.5," | ",F12.5,"|| ",F12.5," | ",F12.5)') x1,x2,x3, &
-initialG(x1,x2),GetPDF(x1,x2,0,outputT='T'),0.d0,GetPDF(x1,x2,-10,outputT='T')
+initialG(x1,x2),GetPDF(x1,x2,Q,0,outputT='T'),0.d0,GetPDF(x1,x2,Q,-10,outputT='T')
 
 write(*,*) "  "
 contains

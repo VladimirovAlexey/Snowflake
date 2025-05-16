@@ -17,10 +17,10 @@ INCLUDE 'commonVariables.f90'
 !!!!! These global variables save the result of current evolution
 !!!!! first index is the Q-index
 !!!!! These are C-odd functions
-real(dp),allocatable:: Uplus(:,:,:),Dplus(:,:,:),Splus(:,:,:),Cplus(:,:,:),Bplus(:,:,:),Gplus(:,:,:)
-real(dp),allocatable:: Uminus(:,:,:),Dminus(:,:,:),Sminus(:,:,:),Cminus(:,:,:),Bminus(:,:,:),Gminus(:,:,:)
+real(dp),allocatable:: Uplus(:,:),Dplus(:,:),Splus(:,:),Cplus(:,:),Bplus(:,:),Gplus(:,:)
+real(dp),allocatable:: Uminus(:,:),Dminus(:,:),Sminus(:,:),Cminus(:,:),Bminus(:,:),Gminus(:,:)
 !!!!! These are C-even functions
-real(dp),allocatable:: Uodd(:,:,:),Dodd(:,:,:),Sodd(:,:,:),Codd(:,:,:),Bodd(:,:,:)
+real(dp),allocatable:: Uodd(:,:),Dodd(:,:),Sodd(:,:),Codd(:,:),Bodd(:,:)
 
 !!!!! Global variables for saving the Q-grid
 !!!!! the grid is saved with Q=Qmin*exp(t/2), t=2 log(Q/Qmin)
@@ -32,7 +32,10 @@ real(dp)::Qmin,Qmax
 !!!!! ultimate points of grid
 integer::maxT
 
-public:: SnowFlake_Initialize,ComputeEvolution, ComputeEvolutionChiralOdd, GetPDF,GetPDFChiralOdd
+!!!!! flags to setup if the evolution is already preapread or not
+logical:: evolutionEvenPrepared,evolutionOddPrepared
+
+public:: SnowFlake_Initialize,ComputeEvolution, ComputeEvolutionChiralOdd, GetPDF,GetPDFChiralOdd,G2,D2,G2_list,D2_List
 
 interface QFromt
     module procedure QFromt_int, QFromt_real
@@ -57,7 +60,7 @@ end if
 call cpu_time(t1)
 !$ t1=omp_get_wtime()
 
-write(*,*) color("----------------------- SNOWFLAKE V1.0 -----------------------",c_cyan)
+write(*,*) color("----------------------- SNOWFLAKE V2.0 -----------------------",c_cyan)
 write(*,*) color("                           /\‾‾‾/\                            ",c_cyan)
 write(*,*) color("                          /  \ /  \                           ",c_cyan)
 write(*,*) color("                          ----o----                           ",c_cyan)
@@ -70,48 +73,55 @@ write(*,*) "SnowFlake initlization with INI-file:"//trim(path)
 !----------------- reading ini-file --------------------------------------
 OPEN(UNIT=51, FILE=path, ACTION="read", STATUS="old")
 
+!!! Number of grid-nodes in the sector-angle
 call MoveTO(51,'0   :')
 read(51,*) showINI
 
-call MoveTO(51,'00  :')
+call MoveTO(51,'1   :')
 read(51,*) showPROCESS
 
-!!! Number of grid-nodes in the sector-angle
-call MoveTO(51,'1   :')
-read(51,*) NUM_phi
-NUM_perimeter=6*NUM_phi-1
-
-!!! Number of grid-nodes in the radius
-call MoveTO(51,'2   :')
-read(51,*) NUM_R
-NUM_TOT=(NUM_perimeter+1)*(NUM_R+1)
-
-!!! Value of minimal radius
-call MoveTO(51,'3   :')
+!!! Minimal value of X
+call MoveTO(51,'A.1 :')
 read(51,*) xMIN
 
-!!! Value of zero
-call MoveTO(51,'4   :')
+!!! Number of nodes in each subgrid in R
+call MoveTO(51,'A.2 :')
+read(51,*) NUM_RHO
+
+!!! Number of nodes in each subgrid in PHI
+call MoveTO(51,'A.3 :')
+read(51,*) NUM_PHI
+
+!!!! the last integer for grid in RHO and PHI, 0... N (i.e. total size is +1)
+NUM_TOT_RHO=NUM_RHO
+NUM_TOT_PHI=6*NUM_PHI-1
+
+!!!! the last integer for 1D grid in RHO and PHI, 0... N (i.e. total size is +1)
+NUM_TOT=(NUM_TOT_RHO+1)*(NUM_TOT_PHI+1)-1
+
+
+!!!!------------------ numerical parameters
+call MoveTO(51,'B.1 :')
 read(51,*) zero
 
 !!! Initialize Chiral-Even kernels
-call MoveTO(51,'8   :')
+call MoveTO(51,'D.1 :')
 read(51,*) IncludeChiralEvenEvolution
 !!! Initialize Chiral-Odd kernels
-call MoveTO(51,'9   :')
+call MoveTO(51,'D.2 :')
 read(51,*) IncludeChiralOddEvolution
 !!! Take into account gluon and flavor mixing (singlet evolution)
-call MoveTO(51,'10  :')
+call MoveTO(51,'D.3 :')
 read(51,*) useSingletEvolution
 !!! Mass of CHARM threshold [GeV]
-call MoveTO(51,'11  :')
+call MoveTO(51,'D.4 :')
 read(51,*) massCHARM
 !!! Mass of BOTTOM threshold [GeV]
-call MoveTO(51,'12  :')
+call MoveTO(51,'D.5 :')
 read(51,*) massBOTTOM
 
 !!! Mass of BOTTOM threshold [GeV]
-call MoveTO(51,'15  :')
+call MoveTO(51,'E.1 :')
 read(51,*) stepT
 
 CLOSE (51, STATUS='KEEP')
@@ -120,9 +130,12 @@ Qmin=1.
 Qmax=2.
 maxT=1
 
+evolutionEvenPrepared=.false.
+evolutionOddPrepared=.false.
+
 if(showINI) then
     write(*,*) "SnowFlake parameters:"
-    write(*,'("Grid size = (",I4," x",I4,") = ",I8, " nodes.")') NUM_perimeter,NUM_R,NUM_TOT
+    write(*,'("Grid size = (",I4," x",I4,") = ",I8, " nodes.")') NUM_RHO,NUM_PHI,NUM_TOT
     write(*,'(A)',advance="no") "Include Chiral-odd evolution:"
     if(IncludeChiralEvenEvolution) then
         write(*,*) color(" YES",c_green)
@@ -146,29 +159,8 @@ if(showINI) then
 end if
 
 if(.not.(IncludeChiralEvenEvolution .or. IncludeChiralOddEvolution)) then
-    write(*,*) ErrorString("Non of evolution types are included. EVALUTION TERMINATED.","main")
-    stop
+    ERROR STOP ErrorString("Non of evolution types are included. EVALUTION TERMINATED.","main")
 end if
-
-! allocate(Uplus(0:NUM_R,0:NUM_perimeter))
-! allocate(Dplus(0:NUM_R,0:NUM_perimeter))
-! allocate(Splus(0:NUM_R,0:NUM_perimeter))
-! allocate(Cplus(0:NUM_R,0:NUM_perimeter))
-! allocate(Bplus(0:NUM_R,0:NUM_perimeter))
-! allocate(Gplus(0:NUM_R,0:NUM_perimeter))
-!
-! allocate(Uminus(0:NUM_R,0:NUM_perimeter))
-! allocate(Dminus(0:NUM_R,0:NUM_perimeter))
-! allocate(Sminus(0:NUM_R,0:NUM_perimeter))
-! allocate(Cminus(0:NUM_R,0:NUM_perimeter))
-! allocate(Bminus(0:NUM_R,0:NUM_perimeter))
-! allocate(Gminus(0:NUM_R,0:NUM_perimeter))
-!
-! allocate(Uodd(0:NUM_R,0:NUM_perimeter))
-! allocate(Dodd(0:NUM_R,0:NUM_perimeter))
-! allocate(Sodd(0:NUM_R,0:NUM_perimeter))
-! allocate(Codd(0:NUM_R,0:NUM_perimeter))
-! allocate(Bodd(0:NUM_R,0:NUM_perimeter))
 
 call Initialize_HexGrid(path)
 call EvolutionKernels_Initialize(path)
@@ -184,7 +176,7 @@ end subroutine SnowFlake_Initialize
 pure function tFromQ(Q)
 real(dp)::tFromQ
 real(dp),intent(in)::Q
-tFromQ=int(2.d0*log(Q/Qmin)/stepT)
+tFromQ=2.d0*log(Q/Qmin)/stepT
 end function tFromQ
 
 !!!! return Q correpsonding to given t
@@ -221,13 +213,13 @@ end function QFromt_int
 subroutine ComputeEvolution(mu0,mu1,alpha,G1,U1,D1,S1,C1,B1,G2,U2,D2,S2,C2,B2,inputQ,inputG)
 real(dp),external,optional::G1,U1,D1,S1,C1,B1,G2,U2,D2,S2,C2,B2
 real(dp),external::alpha
-real(dp),dimension(0:NUM_TOT-1)::G_p,U_p,D_p,S_p,C_p,B_p
-real(dp),dimension(0:NUM_TOT-1)::G_m,U_m,D_m,S_m,C_m,B_m
+real(dp),dimension(0:NUM_TOT)::G_p,U_p,D_p,S_p,C_p,B_p
+real(dp),dimension(0:NUM_TOT)::G_m,U_m,D_m,S_m,C_m,B_m
 real(dp),intent(in)::mu0,mu1
 character(len=1),optional,intent(in)::inputQ,inputG
 character(len=1)::inQ,inG
 
-integer::n,k,cc,i
+integer::n,i
 real(dp)::x1,x2,x3,muT,muT1,t1,t2
 !$ real*8::omp_get_wtime
 
@@ -250,204 +242,196 @@ SELECT CASE (inQ)
     CASE ('T')
         !!!! \mathcal{S}+=T(123)+T(321)-DeltaT(123)+DeltaT(321)
         !!!! \mathcal{S}-=T(123)-T(321)-DeltaT(123)-DeltaT(321)
-        do n=0,NUM_R
-        do k=0,NUM_perimeter
-        cc=Index1D(n,k)
-        call NKtoX12(n,k,x1,x2)
-        x3=-x1-x2
+        do n=0,NUM_TOT
+        call get_X123_from_1Dindex(n,x1,x2,x3)
             !!!! U-quark
             if(present(U1)) then !!!! T
-                U_p(cc)=U1(x1,x2)+U1(x3,x2)
-                U_m(cc)=U1(x1,x2)-U1(x3,x2)
+                U_p(n)=U1(x1,x2)+U1(x3,x2)
+                U_m(n)=U1(x1,x2)-U1(x3,x2)
             else
-                U_p(cc)=0._dp
-                U_m(cc)=0._dp
+                U_p(n)=0._dp
+                U_m(n)=0._dp
             end if
             if(present(U2)) then !!!! DeltaT
-                U_p(cc)=U_p(cc)-U2(x1,x2)+U2(x3,x2)
-                U_m(cc)=U_m(cc)-U2(x1,x2)-U2(x3,x2)
+                U_p(n)=U_p(n)-U2(x1,x2)+U2(x3,x2)
+                U_m(n)=U_m(n)-U2(x1,x2)-U2(x3,x2)
             end if
 
             !!!! D-quark
             if(present(D1)) then !!!! T
-                D_p(cc)=D1(x1,x2)+D1(x3,x2)
-                D_m(cc)=D1(x1,x2)-D1(x3,x2)
+                D_p(n)=D1(x1,x2)+D1(x3,x2)
+                D_m(n)=D1(x1,x2)-D1(x3,x2)
             else
-                D_p(cc)=0._dp
-                D_m(cc)=0._dp
+                D_p(n)=0._dp
+                D_m(n)=0._dp
             end if
             if(present(D2)) then !!!! DeltaT
-                D_p(cc)=D_p(cc)-D2(x1,x2)+D2(x3,x2)
-                D_m(cc)=D_m(cc)-D2(x1,x2)-D2(x3,x2)
+                D_p(n)=D_p(n)-D2(x1,x2)+D2(x3,x2)
+                D_m(n)=D_m(n)-D2(x1,x2)-D2(x3,x2)
             end if
 
             !!!! S-quark
             if(present(S1)) then !!!! T
-                S_p(cc)=S1(x1,x2)+S1(x3,x2)
-                S_m(cc)=S1(x1,x2)-S1(x3,x2)
+                S_p(n)=S1(x1,x2)+S1(x3,x2)
+                S_m(n)=S1(x1,x2)-S1(x3,x2)
             else
-                S_p(cc)=0._dp
-                S_m(cc)=0._dp
+                S_p(n)=0._dp
+                S_m(n)=0._dp
             end if
             if(present(S2)) then !!!! DeltaT
-                S_p(cc)=S_p(cc)-S2(x1,x2)+S2(x3,x2)
-                S_m(cc)=S_m(cc)-S2(x1,x2)-S2(x3,x2)
+                S_p(n)=S_p(n)-S2(x1,x2)+S2(x3,x2)
+                S_m(n)=S_m(n)-S2(x1,x2)-S2(x3,x2)
             end if
 
             !!!! C-quark
             if(present(C1)) then !!!! T
-                C_p(cc)=C1(x1,x2)+C1(x3,x2)
-                C_m(cc)=C1(x1,x2)-C1(x3,x2)
+                C_p(n)=C1(x1,x2)+C1(x3,x2)
+                C_m(n)=C1(x1,x2)-C1(x3,x2)
             else
-                C_p(cc)=0._dp
-                C_m(cc)=0._dp
+                C_p(n)=0._dp
+                C_m(n)=0._dp
             end if
             if(present(C2)) then !!!! DeltaT
-                C_p(cc)=C_p(cc)-C2(x1,x2)+C2(x3,x2)
-                C_m(cc)=C_m(cc)-C2(x1,x2)-C2(x3,x2)
+                C_p(n)=C_p(n)-C2(x1,x2)+C2(x3,x2)
+                C_m(n)=C_m(n)-C2(x1,x2)-C2(x3,x2)
             end if
 
             !!!! B-quark
             if(present(B1)) then !!!! T
-                B_p(cc)=B1(x1,x2)+B1(x3,x2)
-                B_m(cc)=B1(x1,x2)-B1(x3,x2)
+                B_p(n)=B1(x1,x2)+B1(x3,x2)
+                B_m(n)=B1(x1,x2)-B1(x3,x2)
             else
-                B_p(cc)=0._dp
-                B_m(cc)=0._dp
+                B_p(n)=0._dp
+                B_m(n)=0._dp
             end if
             if(present(B2)) then !!!! DeltaT
-                B_p(cc)=B_p(cc)-B2(x1,x2)+B2(x3,x2)
-                B_m(cc)=B_m(cc)-B2(x1,x2)-B2(x3,x2)
+                B_p(n)=B_p(n)-B2(x1,x2)+B2(x3,x2)
+                B_m(n)=B_m(n)-B2(x1,x2)-B2(x3,x2)
             end if
 
-        end do
         end do
 
     CASE ('S')
         !!!! \mathcal{S}+=-2(S+(123)+S-(321))
         !!!! \mathcal{S}-=-2(S+(123)-S-(321))
-        do n=0,NUM_R
-        do k=0,NUM_perimeter
-        cc=Index1D(n,k)
-        call NKtoX12(n,k,x1,x2)
-        x3=-x1-x2
+        do n=0,NUM_TOT
+        call get_X123_from_1Dindex(n,x1,x2,x3)
             !!!! U-quark
             if(present(U1)) then !!!! S+
-                U_p(cc)=-2*U1(x1,x2)
-                U_m(cc)=-2*U1(x1,x2)
+                U_p(n)=-2*U1(x1,x2)
+                U_m(n)=-2*U1(x1,x2)
             else
-                U_p(cc)=0._dp
-                U_m(cc)=0._dp
+                U_p(n)=0._dp
+                U_m(n)=0._dp
             end if
             if(present(U2)) then !!!! S-
-                U_p(cc)=U_p(cc)-2*U2(x3,x2)
-                U_m(cc)=U_m(cc)+2*U2(x3,x2)
+                U_p(n)=U_p(n)-2*U2(x3,x2)
+                U_m(n)=U_m(n)+2*U2(x3,x2)
             end if
 
             !!!! D-quark
             if(present(D1)) then !!!! S+
-                D_p(cc)=-2*D1(x1,x2)
-                D_m(cc)=-2*D1(x1,x2)
+                D_p(n)=-2*D1(x1,x2)
+                D_m(n)=-2*D1(x1,x2)
             else
-                D_p(cc)=0._dp
-                D_m(cc)=0._dp
+                D_p(n)=0._dp
+                D_m(n)=0._dp
             end if
             if(present(D2)) then !!!! S-
-                D_p(cc)=D_p(cc)-2*D2(x3,x2)
-                D_m(cc)=D_m(cc)+2*D2(x3,x2)
+                D_p(n)=D_p(n)-2*D2(x3,x2)
+                D_m(n)=D_m(n)+2*D2(x3,x2)
             end if
 
             !!!! S-quark
             if(present(S1)) then !!!! S+
-                S_p(cc)=-2*S1(x1,x2)
-                S_m(cc)=-2*S1(x1,x2)
+                S_p(n)=-2*S1(x1,x2)
+                S_m(n)=-2*S1(x1,x2)
             else
-                S_p(cc)=0._dp
-                S_m(cc)=0._dp
+                S_p(n)=0._dp
+                S_m(n)=0._dp
             end if
             if(present(S2)) then !!!! S-
-                S_p(cc)=S_p(cc)-2*S2(x3,x2)
-                S_m(cc)=S_m(cc)+2*S2(x3,x2)
+                S_p(n)=S_p(n)-2*S2(x3,x2)
+                S_m(n)=S_m(n)+2*S2(x3,x2)
             end if
 
             !!!! C-quark
             if(present(C1)) then !!!! S+
-                C_p(cc)=-2*C1(x1,x2)
-                C_m(cc)=-2*C1(x1,x2)
+                C_p(n)=-2*C1(x1,x2)
+                C_m(n)=-2*C1(x1,x2)
             else
-                C_p(cc)=0._dp
-                C_m(cc)=0._dp
+                C_p(n)=0._dp
+                C_m(n)=0._dp
             end if
             if(present(C2)) then !!!! S-
-                C_p(cc)=C_p(cc)-2*C2(x3,x2)
-                C_m(cc)=C_m(cc)+2*C2(x3,x2)
+                C_p(n)=C_p(n)-2*C2(x3,x2)
+                C_m(n)=C_m(n)+2*C2(x3,x2)
             end if
 
             !!!! B-quark
             if(present(B1)) then !!!! S+
-                B_p(cc)=-2*B1(x1,x2)
-                B_m(cc)=-2*B1(x1,x2)
+                B_p(n)=-2*B1(x1,x2)
+                B_m(n)=-2*B1(x1,x2)
             else
-                B_p(cc)=0._dp
-                B_m(cc)=0._dp
+                B_p(n)=0._dp
+                B_m(n)=0._dp
             end if
             if(present(B2)) then !!!! S-
-                B_p(cc)=B_p(cc)-2*B2(x3,x2)
-                B_m(cc)=B_m(cc)+2*B2(x3,x2)
+                B_p(n)=B_p(n)-2*B2(x3,x2)
+                B_m(n)=B_m(n)+2*B2(x3,x2)
             end if
 
-        end do
         end do
 
     CASE ('C')  !!! the definition is C-definite
         if(present(U1)) then
-            U_p=FXYto1D(U1)
+            U_p=GETgrid(U1)
         else
             U_p=0._dp
         end if
         if(present(D1)) then
-            D_p=FXYto1D(D1)
+            D_p=GETgrid(D1)
         else
             D_p=0._dp
         end if
         if(present(S1)) then
-            S_p=FXYto1D(S1)
+            S_p=GETgrid(S1)
         else
             S_p=0._dp
         end if
         if(present(C1)) then
-            C_p=FXYto1D(C1)
+            C_p=GETgrid(C1)
         else
             C_p=0._dp
         end if
         if(present(B1)) then
-            B_p=FXYto1D(B1)
+            B_p=GETgrid(B1)
         else
             B_p=0._dp
         end if
         !--------------
         if(present(U2)) then
-            U_m=FXYto1D(U2)
+            U_m=GETgrid(U2)
         else
             U_m=0._dp
         end if
         if(present(D2)) then
-            D_m=FXYto1D(D2)
+            D_m=GETgrid(D2)
         else
             D_m=0._dp
         end if
         if(present(S2)) then
-            S_m=FXYto1D(S2)
+            S_m=GETgrid(S2)
         else
             S_m=0._dp
         end if
         if(present(C2)) then
-            C_m=FXYto1D(C2)
+            C_m=GETgrid(C2)
         else
             C_m=0._dp
         end if
         if(present(B2)) then
-            B_m=FXYto1D(B2)
+            B_m=GETgrid(B2)
         else
             B_m=0._dp
         end if
@@ -471,33 +455,29 @@ SELECT CASE(inG)
     CASE ('T')
         !!! \mathcal{G}+=T+(123)-T+(132)+T+(213)
         !!! \mathcal{G}-=T-(123)+T-(132)-T-(213)
-        do n=0,NUM_R
-        do k=0,NUM_perimeter
-        cc=Index1D(n,k)
-        call NKtoX12(n,k,x1,x2)
-        x3=-x1-x2
+        do n=0,NUM_TOT
+        call get_X123_from_1Dindex(n,x1,x2,x3)
             !!!! G+
             if(present(G1)) then !!!! T
-                G_p(cc)=G1(x1,x2)-G1(x1,x3)+G1(x2,x1)
+                G_p(n)=G1(x1,x2)-G1(x1,x3)+G1(x2,x1)
             else
-                G_p(cc)=0._dp
+                G_p(n)=0._dp
             end if
             !!!! G-
             if(present(G2)) then !!!! T
-                G_m(cc)=G2(x1,x2)+G2(x1,x3)-G2(x2,x1)
+                G_m(n)=G2(x1,x2)+G2(x1,x3)-G2(x2,x1)
             else
-                G_m(cc)=0._dp
+                G_m(n)=0._dp
             end if
-        end do
         end do
     CASE ('C') !!! the definition is C-definite
         if(present(G1)) then
-            G_p=FXYto1D(G1)
+            G_p=GETgrid(G1)
         else
             G_p=0._dp
         end if
         if(present(G2)) then
-            G_m=FXYto1D(G2)
+            G_m=GETgrid(G2)
         else
             G_m=0._dp
         end if
@@ -539,34 +519,34 @@ if(allocated(Bminus)) deallocate(Bminus)
 if(allocated(Gminus)) deallocate(Gminus)
 
 !!!!!!! allocate the space
-allocate(Uplus(0:maxT,0:NUM_R,0:NUM_perimeter))
-allocate(Dplus(0:maxT,0:NUM_R,0:NUM_perimeter))
-allocate(Splus(0:maxT,0:NUM_R,0:NUM_perimeter))
-allocate(Cplus(0:maxT,0:NUM_R,0:NUM_perimeter))
-allocate(Bplus(0:maxT,0:NUM_R,0:NUM_perimeter))
-allocate(Gplus(0:maxT,0:NUM_R,0:NUM_perimeter))
+allocate(Uplus(0:maxT,0:NUM_TOT))
+allocate(Dplus(0:maxT,0:NUM_TOT))
+allocate(Splus(0:maxT,0:NUM_TOT))
+allocate(Cplus(0:maxT,0:NUM_TOT))
+allocate(Bplus(0:maxT,0:NUM_TOT))
+allocate(Gplus(0:maxT,0:NUM_TOT))
 
-allocate(Uminus(0:maxT,0:NUM_R,0:NUM_perimeter))
-allocate(Dminus(0:maxT,0:NUM_R,0:NUM_perimeter))
-allocate(Sminus(0:maxT,0:NUM_R,0:NUM_perimeter))
-allocate(Cminus(0:maxT,0:NUM_R,0:NUM_perimeter))
-allocate(Bminus(0:maxT,0:NUM_R,0:NUM_perimeter))
-allocate(Gminus(0:maxT,0:NUM_R,0:NUM_perimeter))
+allocate(Uminus(0:maxT,0:NUM_TOT))
+allocate(Dminus(0:maxT,0:NUM_TOT))
+allocate(Sminus(0:maxT,0:NUM_TOT))
+allocate(Cminus(0:maxT,0:NUM_TOT))
+allocate(Bminus(0:maxT,0:NUM_TOT))
+allocate(Gminus(0:maxT,0:NUM_TOT))
 
 !!!!!!!! save initial values
-Uplus(0,:,:)=F1Dto2D(U_p)
-Dplus(0,:,:)=F1Dto2D(D_p)
-Splus(0,:,:)=F1Dto2D(S_p)
-Cplus(0,:,:)=F1Dto2D(C_p)
-Bplus(0,:,:)=F1Dto2D(B_p)
-Gplus(0,:,:)=F1Dto2D(G_p)
+Uplus(0,:)=U_p
+Dplus(0,:)=D_p
+Splus(0,:)=S_p
+Cplus(0,:)=C_p
+Bplus(0,:)=B_p
+Gplus(0,:)=G_p
 
-Uminus(0,:,:)=F1Dto2D(U_m)
-Dminus(0,:,:)=F1Dto2D(D_m)
-Sminus(0,:,:)=F1Dto2D(S_m)
-Cminus(0,:,:)=F1Dto2D(C_m)
-Bminus(0,:,:)=F1Dto2D(B_m)
-Gminus(0,:,:)=F1Dto2D(G_m)
+Uminus(0,:)=U_m
+Dminus(0,:)=D_m
+Sminus(0,:)=S_m
+Cminus(0,:)=C_m
+Bminus(0,:)=B_m
+Gminus(0,:)=G_m
 
 !!! finally call evolution, from step to step, storing at each iteration
 !!! the variables G_p,U_p,D_p,S_p,C_p,B_p, are globally update each step
@@ -574,32 +554,33 @@ do i=1,maxT
     muT=QFromt(i-1) !!!! previous scale
     muT1=QFromt(i)    !!!! next scale
 
-
     call EvolvePLUS(alpha,muT,muT1,G_p,U_p,D_p,S_p,C_p,B_p)
     call EvolveMINUS(alpha,muT,muT1,G_m,U_m,D_m,S_m,C_m,B_m)
 
     !!!!!!!! save values each step
-    Uplus(i,:,:)=F1Dto2D(U_p)
-    Dplus(i,:,:)=F1Dto2D(D_p)
-    Splus(i,:,:)=F1Dto2D(S_p)
-    Cplus(i,:,:)=F1Dto2D(C_p)
-    Bplus(i,:,:)=F1Dto2D(B_p)
-    Gplus(i,:,:)=F1Dto2D(G_p)
+    Uplus(i,:)=U_p
+    Dplus(i,:)=D_p
+    Splus(i,:)=S_p
+    Cplus(i,:)=C_p
+    Bplus(i,:)=B_p
+    Gplus(i,:)=G_p
 
-    Uminus(i,:,:)=F1Dto2D(U_m)
-    Dminus(i,:,:)=F1Dto2D(D_m)
-    Sminus(i,:,:)=F1Dto2D(S_m)
-    Cminus(i,:,:)=F1Dto2D(C_m)
-    Bminus(i,:,:)=F1Dto2D(B_m)
-    Gminus(i,:,:)=F1Dto2D(G_m)
+    Uminus(i,:)=U_m
+    Dminus(i,:)=D_m
+    Sminus(i,:)=S_m
+    Cminus(i,:)=C_m
+    Bminus(i,:)=B_m
+    Gminus(i,:)=G_m
 end do
 
 call cpu_time(t2)
 !$ t2=omp_get_wtime()
 
 if(showPROCESS) then
-    write(*,'("Snowflake: grid computed. Timing = ",F12.6," sec.")') t2-t1
+    write(*,'("Snowflake: evolution grid computed. Timing = ",F12.6," sec.")') t2-t1
 end if
+
+evolutionEvenPrepared=.true.
 
 end subroutine ComputeEvolution
 
@@ -613,11 +594,11 @@ end subroutine ComputeEvolution
 subroutine ComputeEvolutionChiralOdd(mu0,mu1,alpha,U1,D1,S1,C1,B1)
 real(dp),external,optional::U1,D1,S1,C1,B1
 real(dp),external::alpha
-real(dp),dimension(0:NUM_TOT-1)::U_p,D_p,S_p,C_p,B_p
+real(dp),dimension(0:NUM_TOT)::U_p,D_p,S_p,C_p,B_p
 real(dp),intent(in)::mu0,mu1
 
-integer::n,k,cc,i
-real(dp)::x1,x2,x3,t0,t1,muT,muT1,time1,time2
+integer::i
+real(dp)::t0,t1,muT,muT1,time1,time2
 !$ real*8::omp_get_wtime
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -646,18 +627,18 @@ if(allocated(Codd)) deallocate(Codd)
 if(allocated(Bodd)) deallocate(Bodd)
 
 !!!!!!! allocate the space
-allocate(Uodd(0:maxT,0:NUM_R,0:NUM_perimeter))
-allocate(Dodd(0:maxT,0:NUM_R,0:NUM_perimeter))
-allocate(Sodd(0:maxT,0:NUM_R,0:NUM_perimeter))
-allocate(Codd(0:maxT,0:NUM_R,0:NUM_perimeter))
-allocate(Bodd(0:maxT,0:NUM_R,0:NUM_perimeter))
+allocate(Uodd(0:maxT,0:NUM_TOT))
+allocate(Dodd(0:maxT,0:NUM_TOT))
+allocate(Sodd(0:maxT,0:NUM_TOT))
+allocate(Codd(0:maxT,0:NUM_TOT))
+allocate(Bodd(0:maxT,0:NUM_TOT))
 
 !!! the chiral odd functions do not mix in flavor.
 !!! Thus if something is zero, it remains zero. And there is no need to compute it
 
 if(present(U1)) then
-    U_p=FXYto1D(U1)
-    Uodd(0,:,:)=F1Dto2D(U_p)
+    U_p=GETgrid(U1)
+    Uodd(0,:)=U_p
 
     do i=1,maxT
         muT=QFromt(i-1) !!!! previous scale
@@ -668,16 +649,16 @@ if(present(U1)) then
         t1=2*log(muT1)
         call EvChiralOdd(U_p,as,t0,t1)
         !!!!!!!! save values each step
-        Uodd(i,:,:)=F1Dto2D(U_p)
+        Uodd(i,:)=U_p
     end do
 else
 
-    Uodd(:,:,:)=0._dp
+    Uodd(:,:)=0._dp
 end if
 
 if(present(D1)) then
-    D_p=FXYto1D(D1)
-    Dodd(0,:,:)=F1Dto2D(D_p)
+    D_p=GETgrid(D1)
+    Dodd(0,:)=D_p
 
     do i=1,maxT
         muT=QFromt(i-1) !!!! previous scale
@@ -688,16 +669,16 @@ if(present(D1)) then
         t1=2*log(muT1)
         call EvChiralOdd(D_p,as,t0,t1)
         !!!!!!!! save values each step
-        Dodd(i,:,:)=F1Dto2D(D_p)
+        Dodd(i,:)=D_p
     end do
 else
 
-    Dodd(:,:,:)=0._dp
+    Dodd(:,:)=0._dp
 end if
 
 if(present(S1)) then
-    S_p=FXYto1D(S1)
-    Sodd(0,:,:)=F1Dto2D(S_p)
+    S_p=GETgrid(S1)
+    Sodd(0,:)=S_p
 
     do i=1,maxT
         muT=QFromt(i-1) !!!! previous scale
@@ -708,16 +689,16 @@ if(present(S1)) then
         t1=2*log(muT1)
         call EvChiralOdd(S_p,as,t0,t1)
         !!!!!!!! save values each step
-        Sodd(i,:,:)=F1Dto2D(S_p)
+        Sodd(i,:)=S_p
     end do
 else
 
-    Sodd(:,:,:)=0._dp
+    Sodd(:,:)=0._dp
 end if
 
 if(present(C1)) then
-    C_p=FXYto1D(C1)
-    Codd(0,:,:)=F1Dto2D(C_p)
+    C_p=GETgrid(C1)
+    Codd(0,:)=C_p
 
     do i=1,maxT
         muT=QFromt(i-1) !!!! previous scale
@@ -728,16 +709,16 @@ if(present(C1)) then
         t1=2*log(muT1)
         call EvChiralOdd(C_p,as,t0,t1)
         !!!!!!!! save values each step
-        Codd(i,:,:)=F1Dto2D(C_p)
+        Codd(i,:)=C_p
     end do
 else
 
-    Codd(:,:,:)=0._dp
+    Codd(:,:)=0._dp
 end if
 
 if(present(B1)) then
-    B_p=FXYto1D(B1)
-    Bodd(0,:,:)=F1Dto2D(B_p)
+    B_p=GETgrid(B1)
+    Bodd(0,:)=B_p
 
     do i=1,maxT
         muT=QFromt(i-1) !!!! previous scale
@@ -748,11 +729,11 @@ if(present(B1)) then
         t1=2*log(muT1)
         call EvChiralOdd(B_p,as,t0,t1)
         !!!!!!!! save values each step
-        Bodd(i,:,:)=F1Dto2D(B_p)
+        Bodd(i,:)=B_p
     end do
 else
 
-    Bodd(:,:,:)=0._dp
+    Bodd(:,:)=0._dp
 end if
 
 call cpu_time(time2)
@@ -761,6 +742,8 @@ call cpu_time(time2)
 if(showPROCESS) then
     write(*,'("Snowflake: grid computed. Timing = ",F12.6," sec.")') time2-time1
 end if
+
+evolutionOddPrepared=.true.
 
 contains
 
@@ -791,6 +774,10 @@ character(len=1),optional,intent(in)::outputT
 character(len=1)::outT
 real(dp)::x3,r,t_here,f1,f2
 integer::t_low
+
+if(.not.evolutionEvenPrepared) then
+    error stop "The evolution tables are not computed. Run ComputeEvolution"
+end if
 
 !!!!! processing input x's
 x3=-x1-x2
@@ -832,41 +819,41 @@ t_low=int(t_here)
 SELECT CASE (outT)
 CASE ('C')
     if(f==10.or.f==0) then
-        f1=FatXfrom2D(Gplus(t_low,:,:),x1,x2)
-        f2=FatXfrom2D(Gplus(t_low+1,:,:),x1,x2)
+        f1=GETinterpolation(x1,x2,Gplus(t_low,:))
+        f2=GETinterpolation(x1,x2,Gplus(t_low+1,:))
     else if(f==1) then
-        f1=FatXfrom2D(Dplus(t_low,:,:),x1,x2)
-        f2=FatXfrom2D(Dplus(t_low+1,:,:),x1,x2)
+        f1=GETinterpolation(x1,x2,Dplus(t_low,:))
+        f2=GETinterpolation(x1,x2,Dplus(t_low+1,:))
     else if(f==2) then
-        f1=FatXfrom2D(Uplus(t_low,:,:),x1,x2)
-        f2=FatXfrom2D(Uplus(t_low+1,:,:),x1,x2)
+        f1=GETinterpolation(x1,x2,Uplus(t_low,:))
+        f2=GETinterpolation(x1,x2,Uplus(t_low+1,:))
     else if(f==3) then
-        f1=FatXfrom2D(Splus(t_low,:,:),x1,x2)
-        f2=FatXfrom2D(Splus(t_low+1,:,:),x1,x2)
+        f1=GETinterpolation(x1,x2,Splus(t_low,:))
+        f2=GETinterpolation(x1,x2,Splus(t_low+1,:))
     else if(f==4) then
-        f1=FatXfrom2D(Cplus(t_low,:,:),x1,x2)
-        f2=FatXfrom2D(Cplus(t_low+1,:,:),x1,x2)
+        f1=GETinterpolation(x1,x2,Cplus(t_low,:))
+        f2=GETinterpolation(x1,x2,Cplus(t_low+1,:))
     else if(f==5) then
-        f1=FatXfrom2D(Bplus(t_low,:,:),x1,x2)
-        f2=FatXfrom2D(Bplus(t_low+1,:,:),x1,x2)
+        f1=GETinterpolation(x1,x2,Bplus(t_low,:))
+        f2=GETinterpolation(x1,x2,Bplus(t_low+1,:))
     else if(f==-10) then
-        f1=FatXfrom2D(Gminus(t_low,:,:),x1,x2)
-        f2=FatXfrom2D(Gminus(t_low+1,:,:),x1,x2)
+        f1=GETinterpolation(x1,x2,Gminus(t_low,:))
+        f2=GETinterpolation(x1,x2,Gminus(t_low+1,:))
     else if(f==-1) then
-        f1=FatXfrom2D(Dminus(t_low,:,:),x1,x2)
-        f2=FatXfrom2D(Dminus(t_low+1,:,:),x1,x2)
+        f1=GETinterpolation(x1,x2,Dminus(t_low,:))
+        f2=GETinterpolation(x1,x2,Dminus(t_low+1,:))
     else if(f==-2) then
-        f1=FatXfrom2D(Uminus(t_low,:,:),x1,x2)
-        f2=FatXfrom2D(Uminus(t_low+1,:,:),x1,x2)
+        f1=GETinterpolation(x1,x2,Uminus(t_low,:))
+        f2=GETinterpolation(x1,x2,Uminus(t_low+1,:))
     else if(f==-3) then
-        f1=FatXfrom2D(Sminus(t_low,:,:),x1,x2)
-        f2=FatXfrom2D(Sminus(t_low+1,:,:),x1,x2)
+        f1=GETinterpolation(x1,x2,Sminus(t_low,:))
+        f2=GETinterpolation(x1,x2,Sminus(t_low+1,:))
     else if(f==-4) then
-        f1=FatXfrom2D(Cminus(t_low,:,:),x1,x2)
-        f2=FatXfrom2D(Cminus(t_low+1,:,:),x1,x2)
+        f1=GETinterpolation(x1,x2,Cminus(t_low,:))
+        f2=GETinterpolation(x1,x2,Cminus(t_low+1,:))
     else if(f==-5) then
-        f1=FatXfrom2D(Bminus(t_low,:,:),x1,x2)
-        f2=FatXfrom2D(Bminus(t_low+1,:,:),x1,x2)
+        f1=GETinterpolation(x1,x2,Bminus(t_low,:))
+        f2=GETinterpolation(x1,x2,Bminus(t_low+1,:))
     else
         write(*,*) WarningString("the flavor can be only -5,...,5, 10, -10. Zero returned."," ")
         GetPDF=0._dp
@@ -874,61 +861,61 @@ CASE ('C')
     end if
 CASE ('T')
     if(f==10.or.f==0) then
-        f1=(FatXfrom2D(Gplus(t_low,:,:),x1,x2)-FatXfrom2D(Gplus(t_low,:,:),x3,x2))/2
-        f2=(FatXfrom2D(Gplus(t_low+1,:,:),x1,x2)-FatXfrom2D(Gplus(t_low+1,:,:),x3,x2))/2
+        f1=(GETinterpolation(x1,x2,Gplus(t_low,:))-GETinterpolation(x3,x2,Gplus(t_low,:)))/2
+        f2=(GETinterpolation(x1,x2,Gplus(t_low+1,:))-GETinterpolation(x3,x2,Gplus(t_low+1,:)))/2
     else if(f==1) then
-        f1=(FatXfrom2D(Dplus(t_low,:,:),x1,x2)+FatXfrom2D(Dplus(t_low,:,:),x3,x2) &
-            +FatXfrom2D(Dminus(t_low,:,:),x1,x2)-FatXfrom2D(Dminus(t_low,:,:),x3,x2))/4
-        f2=(FatXfrom2D(Dplus(t_low+1,:,:),x1,x2)+FatXfrom2D(Dplus(t_low+1,:,:),x3,x2)&
-            +FatXfrom2D(Dminus(t_low+1,:,:),x1,x2)-FatXfrom2D(Dminus(t_low+1,:,:),x3,x2))/4
+        f1=(GETinterpolation(x1,x2,Dplus(t_low,:))+GETinterpolation(x3,x2,Dplus(t_low,:)) &
+            +GETinterpolation(x1,x2,Dminus(t_low,:))-GETinterpolation(x3,x2,Dminus(t_low,:)))/4
+        f2=(GETinterpolation(x1,x2,Dplus(t_low+1,:))+GETinterpolation(x3,x2,Dplus(t_low+1,:))&
+            +GETinterpolation(x1,x2,Dminus(t_low+1,:))-GETinterpolation(x3,x2,Dminus(t_low+1,:)))/4
     else if(f==2) then
-        f1=(FatXfrom2D(Uplus(t_low,:,:),x1,x2)+FatXfrom2D(Uplus(t_low,:,:),x3,x2)&
-            +FatXfrom2D(Uminus(t_low,:,:),x1,x2)-FatXfrom2D(Uminus(t_low,:,:),x3,x2))/4
-        f2=(FatXfrom2D(Uplus(t_low+1,:,:),x1,x2)+FatXfrom2D(Uplus(t_low+1,:,:),x3,x2)&
-            +FatXfrom2D(Uminus(t_low+1,:,:),x1,x2)-FatXfrom2D(Uminus(t_low+1,:,:),x3,x2))/4
+        f1=(GETinterpolation(x1,x2,Uplus(t_low,:))+GETinterpolation(x3,x2,Uplus(t_low,:))&
+            +GETinterpolation(x1,x2,Uminus(t_low,:))-GETinterpolation(x3,x2,Uminus(t_low,:)))/4
+        f2=(GETinterpolation(x1,x2,Uplus(t_low+1,:))+GETinterpolation(x3,x2,Uplus(t_low+1,:))&
+            +GETinterpolation(x1,x2,Uminus(t_low+1,:))-GETinterpolation(x3,x2,Uminus(t_low+1,:)))/4
     else if(f==3) then
-        f1=(FatXfrom2D(Splus(t_low,:,:),x1,x2)+FatXfrom2D(Splus(t_low,:,:),x3,x2)&
-            +FatXfrom2D(Sminus(t_low,:,:),x1,x2)-FatXfrom2D(Sminus(t_low,:,:),x3,x2))/4
-        f2=(FatXfrom2D(Splus(t_low+1,:,:),x1,x2)+FatXfrom2D(Splus(t_low+1,:,:),x3,x2)&
-            +FatXfrom2D(Sminus(t_low+1,:,:),x1,x2)-FatXfrom2D(Sminus(t_low+1,:,:),x3,x2))/4
+        f1=(GETinterpolation(x1,x2,Splus(t_low,:))+GETinterpolation(x3,x2,Splus(t_low,:))&
+            +GETinterpolation(x1,x2,Sminus(t_low,:))-GETinterpolation(x3,x2,Sminus(t_low,:)))/4
+        f2=(GETinterpolation(x1,x2,Splus(t_low+1,:))+GETinterpolation(x3,x2,Splus(t_low+1,:))&
+            +GETinterpolation(x1,x2,Sminus(t_low+1,:))-GETinterpolation(x3,x2,Sminus(t_low+1,:)))/4
     else if(f==4) then
-        f1=(FatXfrom2D(Cplus(t_low,:,:),x1,x2)+FatXfrom2D(Cplus(t_low,:,:),x3,x2)&
-            +FatXfrom2D(Cminus(t_low,:,:),x1,x2)-FatXfrom2D(Cminus(t_low,:,:),x3,x2))/4
-        f2=(FatXfrom2D(Cplus(t_low+1,:,:),x1,x2)+FatXfrom2D(Cplus(t_low+1,:,:),x3,x2)&
-            +FatXfrom2D(Cminus(t_low+1,:,:),x1,x2)-FatXfrom2D(Cminus(t_low+1,:,:),x3,x2))/4
+        f1=(GETinterpolation(x1,x2,Cplus(t_low,:))+GETinterpolation(x3,x2,Cplus(t_low,:))&
+            +GETinterpolation(x1,x2,Cminus(t_low,:))-GETinterpolation(x3,x2,Cminus(t_low,:)))/4
+        f2=(GETinterpolation(x1,x2,Cplus(t_low+1,:))+GETinterpolation(x3,x2,Cplus(t_low+1,:))&
+            +GETinterpolation(x1,x2,Cminus(t_low+1,:))-GETinterpolation(x3,x2,Cminus(t_low+1,:)))/4
     else if(f==5) then
-        f1=(FatXfrom2D(Bplus(t_low,:,:),x1,x2)+FatXfrom2D(Bplus(t_low,:,:),x3,x2)&
-            +FatXfrom2D(Bminus(t_low,:,:),x1,x2)-FatXfrom2D(Bminus(t_low,:,:),x3,x2))/4
-        f2=(FatXfrom2D(Bplus(t_low+1,:,:),x1,x2)+FatXfrom2D(Bplus(t_low+1,:,:),x3,x2)&
-            +FatXfrom2D(Bminus(t_low+1,:,:),x1,x2)-FatXfrom2D(Bminus(t_low+1,:,:),x3,x2))/4
+        f1=(GETinterpolation(x1,x2,Bplus(t_low,:))+GETinterpolation(x3,x2,Bplus(t_low,:))&
+            +GETinterpolation(x1,x2,Bminus(t_low,:))-GETinterpolation(x3,x2,Bminus(t_low,:)))/4
+        f2=(GETinterpolation(x1,x2,Bplus(t_low+1,:))+GETinterpolation(x3,x2,Bplus(t_low+1,:))&
+            +GETinterpolation(x1,x2,Bminus(t_low+1,:))-GETinterpolation(x3,x2,Bminus(t_low+1,:)))/4
     else if(f==-10) then
-        f1=(FatXfrom2D(Gminus(t_low,:,:),x1,x2)+FatXfrom2D(Gminus(t_low,:,:),x3,x2))/2
-        f2=(FatXfrom2D(Gminus(t_low+1,:,:),x1,x2)+FatXfrom2D(Gminus(t_low+1,:,:),x3,x2))/2
+        f1=(GETinterpolation(x1,x2,Gminus(t_low,:))+GETinterpolation(x3,x2,Gminus(t_low,:)))/2
+        f2=(GETinterpolation(x1,x2,Gminus(t_low+1,:))+GETinterpolation(x3,x2,Gminus(t_low+1,:)))/2
     else if(f==-1) then
-        f1=-(FatXfrom2D(Dplus(t_low,:,:),x1,x2)-FatXfrom2D(Dplus(t_low,:,:),x3,x2)&
-            +FatXfrom2D(Dminus(t_low,:,:),x1,x2)+FatXfrom2D(Dminus(t_low,:,:),x3,x2))/4
-        f2=-(FatXfrom2D(Dplus(t_low+1,:,:),x1,x2)-FatXfrom2D(Dplus(t_low+1,:,:),x3,x2)&
-            +FatXfrom2D(Dminus(t_low+1,:,:),x1,x2)+FatXfrom2D(Dminus(t_low+1,:,:),x3,x2))/4
+        f1=-(GETinterpolation(x1,x2,Dplus(t_low,:))-GETinterpolation(x3,x2,Dplus(t_low,:))&
+            +GETinterpolation(x1,x2,Dminus(t_low,:))+GETinterpolation(x3,x2,Dminus(t_low,:)))/4
+        f2=-(GETinterpolation(x1,x2,Dplus(t_low+1,:))-GETinterpolation(x3,x2,Dplus(t_low+1,:))&
+            +GETinterpolation(x1,x2,Dminus(t_low+1,:))+GETinterpolation(x3,x2,Dminus(t_low+1,:)))/4
     else if(f==-2) then
-        f1=-(FatXfrom2D(Uplus(t_low,:,:),x1,x2)-FatXfrom2D(Uplus(t_low,:,:),x3,x2)&
-            +FatXfrom2D(Uminus(t_low,:,:),x1,x2)+FatXfrom2D(Uminus(t_low,:,:),x3,x2))/4
-        f2=-(FatXfrom2D(Uplus(t_low+1,:,:),x1,x2)-FatXfrom2D(Uplus(t_low+1,:,:),x3,x2)&
-            +FatXfrom2D(Uminus(t_low+1,:,:),x1,x2)+FatXfrom2D(Uminus(t_low+1,:,:),x3,x2))/4
+        f1=-(GETinterpolation(x1,x2,Uplus(t_low,:))-GETinterpolation(x3,x2,Uplus(t_low,:))&
+            +GETinterpolation(x1,x2,Uminus(t_low,:))+GETinterpolation(x3,x2,Uminus(t_low,:)))/4
+        f2=-(GETinterpolation(x1,x2,Uplus(t_low+1,:))-GETinterpolation(x3,x2,Uplus(t_low+1,:))&
+            +GETinterpolation(x1,x2,Uminus(t_low+1,:))+GETinterpolation(x3,x2,Uminus(t_low+1,:)))/4
     else if(f==-3) then
-        f1=-(FatXfrom2D(Splus(t_low,:,:),x1,x2)-FatXfrom2D(Splus(t_low,:,:),x3,x2)&
-            +FatXfrom2D(Sminus(t_low,:,:),x1,x2)+FatXfrom2D(Sminus(t_low,:,:),x3,x2))/4
-        f2=-(FatXfrom2D(Splus(t_low+1,:,:),x1,x2)-FatXfrom2D(Splus(t_low+1,:,:),x3,x2)&
-            +FatXfrom2D(Sminus(t_low+1,:,:),x1,x2)+FatXfrom2D(Sminus(t_low+1,:,:),x3,x2))/4
+        f1=-(GETinterpolation(x1,x2,Splus(t_low,:))-GETinterpolation(x3,x2,Splus(t_low,:))&
+            +GETinterpolation(x1,x2,Sminus(t_low,:))+GETinterpolation(x3,x2,Sminus(t_low,:)))/4
+        f2=-(GETinterpolation(x1,x2,Splus(t_low+1,:))-GETinterpolation(x3,x2,Splus(t_low+1,:))&
+            +GETinterpolation(x1,x2,Sminus(t_low+1,:))+GETinterpolation(x3,x2,Sminus(t_low+1,:)))/4
     else if(f==-4) then
-        f1=-(FatXfrom2D(Cplus(t_low,:,:),x1,x2)-FatXfrom2D(Cplus(t_low,:,:),x3,x2)&
-            +FatXfrom2D(Cminus(t_low,:,:),x1,x2)+FatXfrom2D(Cminus(t_low,:,:),x3,x2))/4
-        f2=-(FatXfrom2D(Cplus(t_low+1,:,:),x1,x2)-FatXfrom2D(Cplus(t_low+1,:,:),x3,x2)&
-            +FatXfrom2D(Cminus(t_low+1,:,:),x1,x2)+FatXfrom2D(Cminus(t_low+1,:,:),x3,x2))/4
+        f1=-(GETinterpolation(x1,x2,Cplus(t_low,:))-GETinterpolation(x3,x2,Cplus(t_low,:))&
+            +GETinterpolation(x1,x2,Cminus(t_low,:))+GETinterpolation(x3,x2,Cminus(t_low,:)))/4
+        f2=-(GETinterpolation(x1,x2,Cplus(t_low+1,:))-GETinterpolation(x3,x2,Cplus(t_low+1,:))&
+            +GETinterpolation(x1,x2,Cminus(t_low+1,:))+GETinterpolation(x3,x2,Cminus(t_low+1,:)))/4
     else if(f==-5) then
-        f1=-(FatXfrom2D(Bplus(t_low,:,:),x1,x2)-FatXfrom2D(Bplus(t_low,:,:),x3,x2)&
-            +FatXfrom2D(Bminus(t_low,:,:),x1,x2)+FatXfrom2D(Bminus(t_low,:,:),x3,x2))/4
-        f2=-(FatXfrom2D(Bplus(t_low+1,:,:),x1,x2)-FatXfrom2D(Bplus(t_low+1,:,:),x3,x2)&
-            +FatXfrom2D(Bminus(t_low+1,:,:),x1,x2)+FatXfrom2D(Bminus(t_low+1,:,:),x3,x2))/4
+        f1=-(GETinterpolation(x1,x2,Bplus(t_low,:))-GETinterpolation(x3,x2,Bplus(t_low,:))&
+            +GETinterpolation(x1,x2,Bminus(t_low,:))+GETinterpolation(x3,x2,Bminus(t_low,:)))/4
+        f2=-(GETinterpolation(x1,x2,Bplus(t_low+1,:))-GETinterpolation(x3,x2,Bplus(t_low+1,:))&
+            +GETinterpolation(x1,x2,Bminus(t_low+1,:))+GETinterpolation(x3,x2,Bminus(t_low+1,:)))/4
     else
         write(*,*) WarningString("the flavor can be only -5,...,5, 10, -10. Zero returned."," ")
         GetPDF=0._dp
@@ -936,41 +923,41 @@ CASE ('T')
     end if
     CASE ('S')
     if(f==10.or.f==0) then
-        f1=(FatXfrom2D(Gplus(t_low,:,:),x1,x2)-FatXfrom2D(Gplus(t_low,:,:),x3,x2))/2
-        f1=(FatXfrom2D(Gplus(t_low+1,:,:),x1,x2)-FatXfrom2D(Gplus(t_low+1,:,:),x3,x2))/2
+        f1=(GETinterpolation(x1,x2,Gplus(t_low,:))-GETinterpolation(x3,x2,Gplus(t_low,:)))/2
+        f1=(GETinterpolation(x1,x2,Gplus(t_low+1,:))-GETinterpolation(x3,x2,Gplus(t_low+1,:)))/2
     else if(f==1) then
-        f1=-(FatXfrom2D(Dplus(t_low,:,:),x1,x2)+FatXfrom2D(Dminus(t_low,:,:),x1,x2))/4
-        f2=-(FatXfrom2D(Dplus(t_low+1,:,:),x1,x2)+FatXfrom2D(Dminus(t_low+1,:,:),x1,x2))/4
+        f1=-(GETinterpolation(x1,x2,Dplus(t_low,:))+GETinterpolation(x1,x2,Dminus(t_low,:)))/4
+        f2=-(GETinterpolation(x1,x2,Dplus(t_low+1,:))+GETinterpolation(x1,x2,Dminus(t_low+1,:)))/4
     else if(f==2) then
-        f1=-(FatXfrom2D(Uplus(t_low,:,:),x1,x2)+FatXfrom2D(Uminus(t_low,:,:),x1,x2))/4
-        f2=-(FatXfrom2D(Uplus(t_low+1,:,:),x1,x2)+FatXfrom2D(Uminus(t_low+1,:,:),x1,x2))/4
+        f1=-(GETinterpolation(x1,x2,Uplus(t_low,:))+GETinterpolation(x1,x2,Uminus(t_low,:)))/4
+        f2=-(GETinterpolation(x1,x2,Uplus(t_low+1,:))+GETinterpolation(x1,x2,Uminus(t_low+1,:)))/4
     else if(f==3) then
-        f1=-(FatXfrom2D(Splus(t_low,:,:),x1,x2)+FatXfrom2D(Sminus(t_low,:,:),x1,x2))/4
-        f2=-(FatXfrom2D(Splus(t_low+1,:,:),x1,x2)+FatXfrom2D(Sminus(t_low+1,:,:),x1,x2))/4
+        f1=-(GETinterpolation(x1,x2,Splus(t_low,:))+GETinterpolation(x1,x2,Sminus(t_low,:)))/4
+        f2=-(GETinterpolation(x1,x2,Splus(t_low+1,:))+GETinterpolation(x1,x2,Sminus(t_low+1,:)))/4
     else if(f==4) then
-        f1=-(FatXfrom2D(Cplus(t_low,:,:),x1,x2)+FatXfrom2D(Cminus(t_low,:,:),x1,x2))/4
-        f2=-(FatXfrom2D(Cplus(t_low+1,:,:),x1,x2)+FatXfrom2D(Cminus(t_low+1,:,:),x1,x2))/4
+        f1=-(GETinterpolation(x1,x2,Cplus(t_low,:))+GETinterpolation(x1,x2,Cminus(t_low,:)))/4
+        f2=-(GETinterpolation(x1,x2,Cplus(t_low+1,:))+GETinterpolation(x1,x2,Cminus(t_low+1,:)))/4
     else if(f==5) then
-        f1=-(FatXfrom2D(Bplus(t_low,:,:),x1,x2)+FatXfrom2D(Bminus(t_low,:,:),x1,x2))/4
-        f2=-(FatXfrom2D(Bplus(t_low+1,:,:),x1,x2)+FatXfrom2D(Bminus(t_low+1,:,:),x1,x2))/4
+        f1=-(GETinterpolation(x1,x2,Bplus(t_low,:))+GETinterpolation(x1,x2,Bminus(t_low,:)))/4
+        f2=-(GETinterpolation(x1,x2,Bplus(t_low+1,:))+GETinterpolation(x1,x2,Bminus(t_low+1,:)))/4
     else if(f==-10) then
-        f1=(FatXfrom2D(Gminus(t_low,:,:),x1,x2)+FatXfrom2D(Gminus(t_low,:,:),x3,x2))/2
-        f2=(FatXfrom2D(Gminus(t_low+1,:,:),x1,x2)+FatXfrom2D(Gminus(t_low+1,:,:),x3,x2))/2
+        f1=(GETinterpolation(x1,x2,Gminus(t_low,:))+GETinterpolation(x3,x2,Gminus(t_low,:)))/2
+        f2=(GETinterpolation(x1,x2,Gminus(t_low+1,:))+GETinterpolation(x3,x2,Gminus(t_low+1,:)))/2
     else if(f==-1) then
-        f1=-(FatXfrom2D(Dplus(t_low,:,:),x3,x2)-FatXfrom2D(Dminus(t_low,:,:),x3,x2))/4
-        f2=-(FatXfrom2D(Dplus(t_low+1,:,:),x3,x2)-FatXfrom2D(Dminus(t_low+1,:,:),x3,x2))/4
+        f1=-(GETinterpolation(x3,x2,Dplus(t_low,:))-GETinterpolation(x3,x2,Dminus(t_low,:)))/4
+        f2=-(GETinterpolation(x3,x2,Dplus(t_low+1,:))-GETinterpolation(x3,x2,Dminus(t_low+1,:)))/4
     else if(f==-2) then
-        f1=-(FatXfrom2D(Uplus(t_low,:,:),x3,x2)-FatXfrom2D(Uminus(t_low,:,:),x3,x2))/4
-        f2=-(FatXfrom2D(Uplus(t_low+1,:,:),x3,x2)-FatXfrom2D(Uminus(t_low+1,:,:),x3,x2))/4
+        f1=-(GETinterpolation(x3,x2,Uplus(t_low,:))-GETinterpolation(x3,x2,Uminus(t_low,:)))/4
+        f2=-(GETinterpolation(x3,x2,Uplus(t_low+1,:))-GETinterpolation(x3,x2,Uminus(t_low+1,:)))/4
     else if(f==-3) then
-        f1=-(FatXfrom2D(Splus(t_low,:,:),x3,x2)-FatXfrom2D(Sminus(t_low,:,:),x3,x2))/4
-        f2=-(FatXfrom2D(Splus(t_low+1,:,:),x3,x2)-FatXfrom2D(Sminus(t_low+1,:,:),x3,x2))/4
+        f1=-(GETinterpolation(x3,x2,Splus(t_low,:))-GETinterpolation(x3,x2,Sminus(t_low,:)))/4
+        f2=-(GETinterpolation(x3,x2,Splus(t_low+1,:))-GETinterpolation(x3,x2,Sminus(t_low+1,:)))/4
     else if(f==-4) then
-        f1=-(FatXfrom2D(Cplus(t_low,:,:),x3,x2)-FatXfrom2D(Cminus(t_low,:,:),x3,x2))/4
-        f2=-(FatXfrom2D(Cplus(t_low+1,:,:),x3,x2)-FatXfrom2D(Cminus(t_low+1,:,:),x3,x2))/4
+        f1=-(GETinterpolation(x3,x2,Cplus(t_low,:))-GETinterpolation(x3,x2,Cminus(t_low,:)))/4
+        f2=-(GETinterpolation(x3,x2,Cplus(t_low+1,:))-GETinterpolation(x3,x2,Cminus(t_low+1,:)))/4
     else if(f==-5) then
-        f1=-(FatXfrom2D(Bplus(t_low,:,:),x3,x2)-FatXfrom2D(Bminus(t_low,:,:),x3,x2))/4
-        f2=-(FatXfrom2D(Bplus(t_low+1,:,:),x3,x2)-FatXfrom2D(Bminus(t_low+1,:,:),x3,x2))/4
+        f1=-(GETinterpolation(x3,x2,Bplus(t_low,:))-GETinterpolation(x3,x2,Bminus(t_low,:)))/4
+        f2=-(GETinterpolation(x3,x2,Bplus(t_low+1,:))-GETinterpolation(x3,x2,Bminus(t_low+1,:)))/4
     else
         write(*,*) WarningString("the flavor can be only -5,...,5, 10, -10. Zero returned."," ")
         GetPDF=0._dp
@@ -999,6 +986,10 @@ real(dp),intent(in)::x1,x2,Q
 integer,intent(in)::f
 real(dp)::x3,r,t_here,f1,f2
 integer::t_low
+
+if(.not.evolutionOddPrepared) then
+    error stop "The evolution tables are not computed. Run ComputeEvolutionChiralOdd"
+end if
 
 x3=-x1-x2
 
@@ -1033,20 +1024,20 @@ t_low=int(t_here)
 
 
 if(f==1) then
-    f1=FatXfrom2D(Dodd(t_low,:,:),x1,x2)
-    f2=FatXfrom2D(Dodd(t_low+1,:,:),x1,x2)
+    f1=GETinterpolation(x1,x2,Dodd(t_low,:))
+    f2=GETinterpolation(x1,x2,Dodd(t_low+1,:))
 else if(f==2) then
-    f1=FatXfrom2D(Uodd(t_low,:,:),x1,x2)
-    f2=FatXfrom2D(Uodd(t_low+1,:,:),x1,x2)
+    f1=GETinterpolation(x1,x2,Uodd(t_low,:))
+    f2=GETinterpolation(x1,x2,Uodd(t_low+1,:))
 else if(f==3) then
-    f1=FatXfrom2D(Sodd(t_low,:,:),x1,x2)
-    f2=FatXfrom2D(Sodd(t_low+1,:,:),x1,x2)
+    f1=GETinterpolation(x1,x2,Sodd(t_low,:))
+    f2=GETinterpolation(x1,x2,Sodd(t_low+1,:))
 else if(f==4) then
-    f1=FatXfrom2D(Codd(t_low,:,:),x1,x2)
-    f2=FatXfrom2D(Codd(t_low+1,:,:),x1,x2)
+    f1=GETinterpolation(x1,x2,Codd(t_low,:))
+    f2=GETinterpolation(x1,x2,Codd(t_low+1,:))
 else if(f==5) then
-    f1=FatXfrom2D(Bodd(t_low,:,:),x1,x2)
-    f2=FatXfrom2D(Bodd(t_low+1,:,:),x1,x2)
+    f1=GETinterpolation(x1,x2,Bodd(t_low,:))
+    f2=GETinterpolation(x1,x2,Bodd(t_low+1,:))
 else
     write(*,*) WarningString("the flavor can be only -5,...,5, 10, -10. Zero returned."," ")
     GetPDFChiralOdd=0._dp
@@ -1070,9 +1061,8 @@ subroutine EvolvePLUS(alpha,mu0,mu1,G,U,D,S,C,B)
 real(dp),external::alpha
 real(dp),intent(in)::mu0,mu1
 real(dp)::t0,t1
-real(dp),dimension(0:NUM_TOT-1)::G,U,D,S,C,B
+real(dp),dimension(0:NUM_TOT)::G,U,D,S,C,B
 real(dp),allocatable,dimension(:)::Singlet,N1,N2,N3,N4!!! singlet, and 3 non-singlet combinations
-integer::i
 
     if(useSingletEvolution) then
 
@@ -1084,11 +1074,11 @@ integer::i
 
     !!!! depending on the range of mu one need to allocate different set of variables
     !!!! in anycase singlet Singlet,N1,N2
-    allocate(Singlet(0:NUM_TOT-1))
-    allocate(N1(0:NUM_TOT-1))
-    allocate(N2(0:NUM_TOT-1))
-    if(mu1>massCHARM) allocate(N3(0:NUM_TOT-1))
-    if(mu1>massBOTTOM) allocate(N4(0:NUM_TOT-1))
+    allocate(Singlet(0:NUM_TOT))
+    allocate(N1(0:NUM_TOT))
+    allocate(N2(0:NUM_TOT))
+    if(mu1>massCHARM) allocate(N3(0:NUM_TOT))
+    if(mu1>massBOTTOM) allocate(N4(0:NUM_TOT))
 
 !         N1=U
 !         N2=U
@@ -1192,7 +1182,6 @@ integer::i
             call EvSingletPLUS(Singlet,G,as,t0,t1,5)
         end if
     end if
-
     !!! non-singletes evolve as they are
 
     !!!! t=log[mu^2]
@@ -1257,14 +1246,6 @@ else
 
 end if
 
-!!!! store result globally as 2D
-!     Uplus=F1Dto2D(U)
-!     Dplus=F1Dto2D(D)
-!     Splus=F1Dto2D(S)
-!     Cplus=F1Dto2D(C)
-!     Bplus=F1Dto2D(B)
-!     Gplus=F1Dto2D(G)
-
 contains
 
 !!!!! as=alpha_s(mu)/(4pi)
@@ -1285,9 +1266,8 @@ subroutine EvolveMINUS(alpha,mu0,mu1,G,U,D,S,C,B)
 real(dp),external::alpha
 real(dp),intent(in)::mu0,mu1
 real(dp)::t0,t1
-real(dp),dimension(0:NUM_TOT-1)::G,U,D,S,C,B
+real(dp),dimension(0:NUM_TOT)::G,U,D,S,C,B
 real(dp),allocatable,dimension(:)::Singlet,N1,N2,N3,N4!!! singlet, and 3 non-singlet combinations
-integer::i
 
 if(useSingletEvolution) then
     !!! singlet evolution
@@ -1300,11 +1280,11 @@ if(useSingletEvolution) then
 
     !!!! depending on the range of mu one need to allocate different set of variables
     !!!! in anycase singlet Singlet,N1,N2
-    allocate(Singlet(0:NUM_TOT-1))
-    allocate(N1(0:NUM_TOT-1))
-    allocate(N2(0:NUM_TOT-1))
-    if(mu1>massCHARM) allocate(N3(0:NUM_TOT-1))
-    if(mu1>massBOTTOM) allocate(N4(0:NUM_TOT-1))
+    allocate(Singlet(0:NUM_TOT))
+    allocate(N1(0:NUM_TOT))
+    allocate(N2(0:NUM_TOT))
+    if(mu1>massCHARM) allocate(N3(0:NUM_TOT))
+    if(mu1>massBOTTOM) allocate(N4(0:NUM_TOT))
 
 
     !!!! The boundary condition of the singlet combination depend on the range of mu
@@ -1464,13 +1444,6 @@ else
 
 end if
 
-!!!! store result globally as 2D
-!     Uminus=F1Dto2D(U)
-!     Dminus=F1Dto2D(D)
-!     Sminus=F1Dto2D(S)
-!     Cminus=F1Dto2D(C)
-!     Bminus=F1Dto2D(B)
-!     Gminus=F1Dto2D(G)
 
 contains
 
@@ -1484,5 +1457,205 @@ end function as
 
 end subroutine EvolveMINUS
 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! G2 function !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!!!! compute the G2 function from the stored projection matrix
+function G2(x,Q,f)
+real(dp)::G2
+real(dp),intent(in)::x,Q
+integer,intent(in)::f
+
+real(dp)::t_here
+integer::t_low,t_low2
+real(dp),dimension(0:NUM_TOT)::functionD1,functionD2,functionD
+
+if(.not.evolutionEvenPrepared) then
+    error stop "The evolution tables are not computed. Run ComputeEvolution"
+end if
+
+if(x>1.d0 .or. x<xMIN) then
+    error stop "ERROR in G2: the value of x is outside of the allowed range [xMin,1]"
+end if
+
+!!!!! processing input Q
+if(Q<Qmin) then
+    write(*,*) WarningString("requested value with Q<QMIN. Returned linear extrapolation."," ")
+end if
+
+if(Q>Qmax) then
+    write(*,*) WarningString("requested value with Q>QMAX. Returned linear extrapolation."," ")
+end if
+
+!!!!! these are the nodes for Q
+t_here=tFromQ(Q)
+t_low=int(t_here)
+t_low2=t_low+1
+
+SELECT CASE(f)
+    CASE(1)
+        functionD1=(Dplus(t_low,:)-Dminus(t_low,:))/2
+        functionD2=(Dplus(t_low2,:)-Dminus(t_low2,:))/2
+    CASE(2)
+        functionD1=(Uplus(t_low,:)-Uminus(t_low,:))/2
+        functionD2=(Uplus(t_low2,:)-Uminus(t_low2,:))/2
+    CASE(3)
+        functionD1=(Splus(t_low,:)-Sminus(t_low,:))/2
+        functionD2=(Splus(t_low2,:)-Sminus(t_low2,:))/2
+    CASE(4)
+        functionD1=(Cplus(t_low,:)-Cminus(t_low,:))/2
+        functionD2=(Cplus(t_low2,:)-Cminus(t_low2,:))/2
+    CASE(5)
+        functionD1=(Bplus(t_low,:)-Bminus(t_low,:))/2
+        functionD2=(Bplus(t_low2,:)-Bminus(t_low2,:))/2
+    CASE(100)!!! proton
+        !!!!!! the D=eq^2/2*(Sp-Sm)
+        functionD1=&
+            2*(Uplus(t_low,:)+Cplus(t_low,:)-Uminus(t_low,:)-Cminus(t_low,:))/9 &
+            +(Dplus(t_low,:)+Splus(t_low,:)+Bplus(t_low,:)-Dminus(t_low,:)-Sminus(t_low,:)-Bminus(t_low,:))/18
+
+        functionD2=&
+            2*(Uplus(t_low2,:)+Cplus(t_low2,:)-Uminus(t_low2,:)-Cminus(t_low2,:))/9 &
+            +(Dplus(t_low2,:)+Splus(t_low2,:)+Bplus(t_low2,:)-Dminus(t_low2,:)-Sminus(t_low2,:)-Bminus(t_low2,:))/18
+    CASE(101)!!! neutron = proton[u<->d]
+        functionD1=&
+            2*(Dplus(t_low,:)+Cplus(t_low,:)-Dminus(t_low,:)-Cminus(t_low,:))/9 &
+            +(Uplus(t_low,:)+Splus(t_low,:)+Bplus(t_low,:)-Uminus(t_low,:)-Sminus(t_low,:)-Bminus(t_low,:))/18
+
+        functionD2=&
+            2*(Dplus(t_low2,:)+Cplus(t_low2,:)-Dminus(t_low2,:)-Cminus(t_low2,:))/9 &
+            +(Uplus(t_low2,:)+Splus(t_low2,:)+Bplus(t_low2,:)-Uminus(t_low2,:)-Sminus(t_low2,:)-Bminus(t_low2,:))/18
+    CASE DEFAULT
+        write(*,*) ErrorString("D2 routine: unknown flavor"," ")
+        write(*,*) "f=",f
+        error stop
+END SELECT
+
+functionD=(t_low2-t_here)*functionD1+(t_here-t_low)*functionD2
+!
+! if(t_low==0) then
+!     write(*,'("{",F8.6,",",F12.8,"},")') x, GETinterpolation(x,0.0d0,functionD)
+! end if
+
+G2=G2xF(x,functionD)
+
+end function G2
+
+!!!!! return the function of G2 computed over the parralel list
+subroutine G2_List(res,x,Q,f)
+real(dp),dimension(:),intent(in)::x
+real(dp),dimension(:),intent(in)::Q
+integer,dimension(:),intent(in)::f
+real(dp),dimension(:),intent(out)::res
+
+integer::i,length
+length=size(x)
+if(size(res)/=length) error stop ErrorString('sizes of output and X lists are not equal.',"Snoflake")
+if(size(Q)/=length) error stop ErrorString('sizes of Q and X lists are not equal.',"Snoflake")
+if(size(f)/=length) error stop ErrorString('sizes of f and X lists are not equal.',"Snoflake")
+
+!$OMP PARALLEL DO DEFAULT(SHARED)
+do i=1,length
+    res(i)=G2(x(i),Q(i),f(i))
+end do
+!$OMP END PARALLEL DO
+
+end subroutine G2_List
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! G2 function !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!!!! compute the D2 Moment from the stored projection matrix
+!!!! f=flavor, it. could be 1:5 (for individial flavors; gluon-undefined) or 100=proton, 101=neutron [u<->d]
+function D2(Q,f)
+real(dp)::D2
+integer,intent(in)::f
+real(dp),intent(in)::Q
+
+real(dp)::t_here
+integer::t_low,t_low2
+real(dp),dimension(0:NUM_TOT)::functionD1,functionD2,functionD
+
+if(.not.evolutionEvenPrepared) then
+    error stop "The evolution tables are not computed. Run ComputeEvolution"
+end if
+
+!!!!! processing input Q
+if(Q<Qmin) then
+    write(*,*) WarningString("requested value with Q<QMIN. Returned linear extrapolation."," ")
+end if
+
+if(Q>Qmax) then
+    write(*,*) WarningString("requested value with Q>QMAX. Returned linear extrapolation."," ")
+end if
+
+!!!!! these are the nodes for Q
+t_here=tFromQ(Q)
+t_low=int(t_here)
+t_low2=t_low+1
+
+
+SELECT CASE(f)
+    CASE(1)
+        !!!!D=1/4*(Sp-Sm)
+        functionD1=(Dplus(t_low,:)-Dminus(t_low,:))/4
+        functionD2=(Dplus(t_low2,:)-Dminus(t_low2,:))/4
+    CASE(2)
+        functionD1=(Uplus(t_low,:)-Uminus(t_low,:))/4
+        functionD2=(Uplus(t_low2,:)-Uminus(t_low2,:))/4
+    CASE(3)
+        functionD1=(Splus(t_low,:)-Sminus(t_low,:))/4
+        functionD2=(Splus(t_low2,:)-Sminus(t_low2,:))/4
+    CASE(4)
+        functionD1=(Cplus(t_low,:)-Cminus(t_low,:))/4
+        functionD2=(Cplus(t_low2,:)-Cminus(t_low2,:))/4
+    CASE(5)
+        functionD1=(Bplus(t_low,:)-Bminus(t_low,:))/4
+        functionD2=(Bplus(t_low2,:)-Bminus(t_low2,:))/4
+    CASE(100)!!! proton
+        !!!!!! the D=eq^2/2*(Sp-Sm)
+        functionD1=&
+            2*(Uplus(t_low,:)+Cplus(t_low,:)-Uminus(t_low,:)-Cminus(t_low,:))/9 &
+            +(Dplus(t_low,:)+Splus(t_low,:)+Bplus(t_low,:)-Dminus(t_low,:)-Sminus(t_low,:)-Bminus(t_low,:))/18
+
+        functionD2=&
+            2*(Uplus(t_low2,:)+Cplus(t_low2,:)-Uminus(t_low2,:)-Cminus(t_low2,:))/9 &
+            +(Dplus(t_low2,:)+Splus(t_low2,:)+Bplus(t_low2,:)-Dminus(t_low2,:)-Sminus(t_low2,:)-Bminus(t_low2,:))/18
+    CASE(101)!!! neutron = proton[u<->d]
+        functionD1=&
+            2*(Dplus(t_low,:)+Cplus(t_low,:)-Dminus(t_low,:)-Cminus(t_low,:))/9 &
+            +(Uplus(t_low,:)+Splus(t_low,:)+Bplus(t_low,:)-Uminus(t_low,:)-Sminus(t_low,:)-Bminus(t_low,:))/18
+
+        functionD2=&
+            2*(Dplus(t_low2,:)+Cplus(t_low2,:)-Dminus(t_low2,:)-Cminus(t_low2,:))/9 &
+            +(Uplus(t_low2,:)+Splus(t_low2,:)+Bplus(t_low2,:)-Uminus(t_low2,:)-Sminus(t_low2,:)-Bminus(t_low2,:))/18
+    CASE DEFAULT
+        write(*,*) ErrorString("D2 routine: unknown flavor"," ")
+        write(*,*) "f=",f
+        error stop
+END SELECT
+
+functionD=(t_low2-t_here)*functionD1+(t_here-t_low)*functionD2
+
+D2=D2xF(functionD)
+
+end function D2
+
+!!!!! return the function of G2 computed over the parralel list
+subroutine D2_List(res,Q,f)
+real(dp),dimension(:),intent(in)::Q
+integer,dimension(:),intent(in)::f
+real(dp),dimension(:),intent(out)::res
+
+integer::i,length
+length=size(Q)
+if(size(res)/=length) error stop ErrorString('sizes of output and Q lists are not equal.',"Snoflake.D2")
+if(size(f)/=length) error stop ErrorString('sizes of f and Q lists are not equal.',"Snoflake.D2")
+
+!$OMP PARALLEL DO DEFAULT(SHARED)
+do i=1,length
+    res(i)=D2(Q(i),f(i))
+end do
+!$OMP END PARALLEL DO
+
+end subroutine D2_List
 
 end module SnowFlake

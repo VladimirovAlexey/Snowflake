@@ -11,25 +11,40 @@ implicit none
 real*8::t1,t2
 !$ real*8::omp_get_wtime
 
-!!!! initialize the Snowflake with particular ini file
-! call  SnowFlake_Initialize("kernels10x15.ini","prog/")
+!------------------------------------------------------
+! ! !!!! initialize the Snowflake with particular ini file
+! call  SnowFlake_Initialize("kernels16x8.ini","prog/")
 !
 ! call cpu_time(t1)
 ! !$ t1=omp_get_wtime()
-! call SaveKernels("kernels/10x15/")
+! call SaveKernels("kernels/16x8/")
 !
 !
-! call ReadKernels("kernels/10x15/")
+! call ReadKernels("kernels/16x8/")
 
-!!! initialize the Snowflake with particular ini file
-call  SnowFlake_Initialize("kernels20x25.ini","prog/")
+!------------------------------------------------------
+! ! initialize the Snowflake with particular ini file
+! call  SnowFlake_Initialize("kernels24x12.ini","prog/")
+!
+! call cpu_time(t1)
+! !$ t1=omp_get_wtime()
+! call SaveKernels("kernels/24x12/")
+!
+!
+! call ReadKernels("kernels/24x12/")
+
+! !------------------------------------------------------
+! ! initialize the Snowflake with particular ini file
+call  SnowFlake_Initialize("kernels25x20.ini","prog/")
 
 call cpu_time(t1)
 !$ t1=omp_get_wtime()
-call SaveKernels("kernels/20x25/")
+call SaveKernels("kernels/25x20/")
 
 
-call ReadKernels("kernels/20x25/")
+call ReadKernels("kernels/25x20/")
+!------------------------------------------------------
+
 call cpu_time(t2)
 !$ t2=omp_get_wtime()
 write(*,*) "Time for computation of evolution",t2-t1

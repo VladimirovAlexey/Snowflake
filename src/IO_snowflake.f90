@@ -74,5 +74,6 @@ contains
     character(len=:), allocatable :: out
     out = color('ERROR: Snowflake.'//trim(moduleName)//': '//trim(str),c_red_bold)
   end function ErrorString
-  
+
+
 end module IO_snowflake

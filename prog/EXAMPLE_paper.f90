@@ -53,7 +53,7 @@ do i=-50,50
     x2=-2*x1
     x3=x1
 
-    r1=GetPDF(x1,x2,2,outputT='T')
+    r1=GetPDF(x1,x2,mu1,2,outputT='T')
     write(*,'("{",F6.3,", ",F12.8,"},")',advance='no') x1,r1
 end do
 write(*,*) " "

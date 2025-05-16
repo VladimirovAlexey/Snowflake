@@ -1,0 +1,40 @@
+!    -*- f90 -*-
+! Note: the context of this file is case sensitive.
+
+python module pysnowflake
+interface
+
+
+module pysnowflake ! in /data/WorkingFiles/Twist3/Snowflake2/PySnowflake/PySnowflake.f90
+    use snowflake
+    use snowflake_model
+    subroutine initialize(file) ! in /data/WorkingFiles/Twist3/Snowflake2/PySnowflake/PySnowflake.f90:pysnowflake
+        character*(*) :: file
+    end subroutine initialize
+    subroutine updateevolutiontable(mu0,mu1) ! in /data/WorkingFiles/Twist3/Snowflake2/PySnowflake/PySnowflake.f90:pysnowflake
+        real*8 intent(in) :: mu0
+        real*8 intent(in) :: mu1
+    end subroutine updateevolutiontable
+    subroutine updatenpparameters(lambdain) ! in /data/WorkingFiles/Twist3/Snowflake2/PySnowflake/PySnowflake.f90:pysnowflake
+        real*8 dimension(:),intent(in) :: lambdain
+    end subroutine updatenpparameters
+    function snowflake_g2_list(x,q,f,listlength) ! in /data/WorkingFiles/Twist3/Snowflake2/PySnowflake/PySnowflake.f90:pysnowflake
+        real*8 dimension(:),intent(in) :: x
+        real*8 dimension(:),intent(in) :: q
+        integer dimension(:),intent(in) :: f
+        integer intent(in) :: listlength
+        real*8 dimension(listlength) :: snowflake_g2_list
+    end function snowflake_g2_list
+    function snowflake_d2_list(q,f,listlength) ! in /data/WorkingFiles/Twist3/Snowflake2/PySnowflake/PySnowflake.f90:pysnowflake
+        real*8 dimension(:),intent(in) :: q
+        integer dimension(:),intent(in) :: f
+        integer intent(in) :: listlength
+        real*8 dimension(listlength) :: snowflake_d2_list
+    end function snowflake_d2_list
+end module pysnowflake
+
+! This file was auto-generated with f2py (version:1.26.4).
+! See:
+! https://web.archive.org/web/20140822061353/http://cens.ioc.ee/projects/f2py2e
+end interface
+end python module pysnowflake

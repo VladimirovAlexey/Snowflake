@@ -1,25 +1,33 @@
 !!!! Working precision of variables
 integer, parameter :: dp = selected_real_kind(15, 307)
 
+!!!!! type for twist-3 function
+abstract interface
+    function func_tw3(x1,x2)
+        import::dp
+        real(dp) :: func_tw3
+        real(dp), intent(in) ::x1,x2
+    end function func_tw3
+end interface
+
 !!!! Print initialization information
 logical::showINI=.false.
 !!!! Print initialization information
 logical::showPROCESS=.false.
 
-!!!! GRID type is defined in the top of the HexGrid.f90
-
-!!!! size of the grid-points along perimeter [k=0,...,6 NUM_phi-1]
-integer::NUM_phi=10
-!!!! total size of the perimeter [k=0,...,6 NUM_phi-1]
-integer::NUM_perimeter=59!6*NUM_phi-1
-!!!! size of the grid-points along radius [n=0,...,NUM_R]
-integer::NUM_R=15
-!!!! total size of the grid
-integer::NUM_TOT=960!(NUM_perimeter+1)*(NUM_R+1)
-!!!! minimal accesable x (r=1)
+!!!! minimal accesable x (r=0)
 real(dp)::xMIN=0.01_dp
 
-
+!!!! number of nodes in rrho = NR
+integer::NUM_RHO=8
+!!!! number of nodes in phi = Mphi
+integer::NUM_PHI=8
+!!!! total size of grid in RHO
+integer::NUM_TOT_RHO=8
+!!!! total size of grid in PHI
+integer::NUM_TOT_PHI=47
+!!!! total size of grid in 1D
+integer::NUM_TOT=22
 
 !!!! Value of zero to compare with
 real(dp)::zero=1d-12
@@ -36,6 +44,8 @@ logical:: IncludeChiralEvenEvolution=.true.
 logical:: IncludeChiralOddEvolution=.true.
 !!!! Include mixing with gluon, other flavors etc.
 logical:: useSingletEvolution=.true.
+!!!! Setup G2-computation
+logical:: IncludeG2Matrix=.true.
 
 !!!! Mass of the CHARM threshold [GeV]
 real(dp):: massCHARM=1.27_dp

@@ -9,7 +9,7 @@ use SnowFlake
 implicit none
 
 real*8::x1,x2,x3
-real*8::mu0,mu1
+real*8::mu0,mu1,Q
 real*8::r1,r2,r3
 
 !!! Prior to run Snowslace initialize it with INI-file.
@@ -21,7 +21,8 @@ real*8::r1,r2,r3
 call  SnowFlake_Initialize("TEST.ini","prog/")
 !call  SnowFlake_Initialize("Snowflake.ini")
 
-!!! Request evolution of a configuration from mu0 to mu1. Both mu's are in GeV.
+!!! Request to compute the evolution of a configuration from mu0 to mu1. Both mu's are in GeV.
+!!!
 !!! Argument alpha is alpha_s=g^2/4pi for QCD. It must be a function with following inteface (see example in the end of the code)
 !!!function alpha(mu)
 !!!        real*8,intent(in)::mu
@@ -42,8 +43,11 @@ call  SnowFlake_Initialize("TEST.ini","prog/")
 !!!
 !!! IMPORTANT: boundary conditions MUST satisfy physical symmetries. Otherwise, result is not correct.
 !!! There is no check for the symmetry.
+!!!
+!!! The evolution results are stored in memory (from mu0 to mu1 with a step sepcified in INI)
+!!! such that aftewards the value at some Q, can be extracted by interpolation
 mu0=1.d0
-mu1=10.d0
+mu1=25.d0
 call ComputeEvolution(mu0,mu1,alpha,U1=initialF,U2=initialA,G1=initialG,inputQ="T",inputG="T")
 
 !!! The grid resulting after evolution is stored in memory.
@@ -61,53 +65,55 @@ call ComputeEvolution(mu0,mu1,alpha,U1=initialF,U2=initialA,G1=initialG,inputQ="
 !!! Here I call for result of Evolution for T(0.2,-0.3,0.1) for u quark
 x1=0.2d0
 x2=-0.3d0
-r1=GetPDF(x1,x2,2,outputT='T')
+Q=10.d0
+r1=GetPDF(x1,x2,Q,2,outputT='T')
 !!! Here I call for result of Evolution for S^+(0.2,-0.3,0.1) for u quark
-r2=GetPDF(x1,x2,2,outputT='S')
+r2=GetPDF(x1,x2,Q,2,outputT='S')
 !!! Here I call for result of Evolution for frak{S}^+(0.2,-0.3,0.1) for u quark
-r3=GetPDF(x1,x2,2,outputT='C')
+r3=GetPDF(x1,x2,Q,2,outputT='C')
 !!! The values are
 write(*,*) "1 GeV->10 GeV. U-quark >>>",r1,r2,r3
 
+Q=20
+r1=GetPDF(x1,x2,Q,2,outputT='T')
+!!! Here I call for result of Evolution for S^+(0.2,-0.3,0.1) for u quark
+r2=GetPDF(x1,x2,Q,2,outputT='S')
+!!! Here I call for result of Evolution for frak{S}^+(0.2,-0.3,0.1) for u quark
+r3=GetPDF(x1,x2,Q,2,outputT='C')
+!!! The values are
+write(*,*) "1 GeV->20 GeV. U-quark >>>",r1,r2,r3
+
 !!! Because of the symmetry T(x1,x2,x3)=T(-x3,-x2,-x1) and DeltaT(x1,x2,x3)=DeltaT(-x3,-x2,-x1)
 !!! let me check it
-r1=GetPDF(0.2d0,-0.3d0,2,outputT='T')
-r2=GetPDF(-0.1d0,0.3d0,2,outputT='T')
+r1=GetPDF(0.2d0,-0.3d0,Q,2,outputT='T')
+r2=GetPDF(-0.1d0,0.3d0,Q,2,outputT='T')
 write(*,*) "These numbers should be same",r1,r2
-r1=GetPDF(0.2d0,-0.3d0,-2,outputT='T')
-r2=GetPDF(-0.1d0,0.3d0,-2,outputT='T')
+r1=GetPDF(0.2d0,-0.3d0,Q,-2,outputT='T')
+r2=GetPDF(-0.1d0,0.3d0,Q,-2,outputT='T')
 write(*,*) "These numbers should be of opposite sign",r1,r2
-
-!!! If another scale of evolution should be computed, it must be evaluated again (to be updated in future versions)
-mu0=1.d0
-mu1=25.d0
-call ComputeEvolution(mu0,mu1,alpha,U1=initialF,U2=initialA,G1=initialG,inputQ="T",inputG="T")
-x1=0.2d0
-x2=-0.3d0
-r1=GetPDF(x1,x2,2,outputT='T')
-r2=GetPDF(x1,x2,2,outputT='S')
-r3=GetPDF(x1,x2,2,outputT='C')
-!!! The values are
-write(*,*) "1 GeV->25 GeV. U-quark >>>",r1,r2,r3
 
 !!!!Same procedure applies to chiral-odd quark distributions
 !!!! In this case one does not need to specify the type of input, since it can be only of single type.
 !!!! Also the boundary conditions are different only by flavors. Because evolution equation for H and E is the same.
 !!!! thus boundary conditions arguments are only U1,D1,S1,C1,B1
-!!!!
-!!!! Here evolution from 1 to 10 GeV, for function H (because the boundary condition is symetric) at d-quark
-mu0=1.d0
-mu1=25.d0
+
 call ComputeEvolutionChiralOdd(mu0,mu1,alpha,D1=initialF)
 
 !!! To get the result call GetPDFChiralOdd(x1,x2,f)
 !!! with f=1,2,3,4,5 only (1=d,2=u,3=s,4=c,5=b)
 x1=0.2d0
 x2=-0.3d0
-r1=GetPDFChiralOdd(x1,x2,1)
+Q=10.d0
+r1=GetPDFChiralOdd(x1,x2,Q,1)
 !!!! Since u-quark was not introduced this number should be zero
-r2=GetPDFChiralOdd(x1,x2,2)
-write(*,*) "1 GeV->10 GeV. D,U-quarks >>>",r1,r2
+r2=GetPDFChiralOdd(x1,x2,Q,2)
+write(*,*) "1 GeV->10 GeV. (chiral odd) D,U-quarks >>>",r1,r2
+
+Q=20.d0
+r1=GetPDFChiralOdd(x1,x2,Q,1)
+!!!! Since u-quark was not introduced this number should be zero
+r2=GetPDFChiralOdd(x1,x2,Q,2)
+write(*,*) "1 GeV->20 GeV. (chiral odd) D,U-quarks >>>",r1,r2
 
 contains
 

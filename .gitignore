@@ -1,4 +1,4 @@
-#.out files produced by fortrat
+#.out files produced by fortran
 a.out
 *.out
 *.mod
@@ -6,6 +6,15 @@ a.out
 
 # result of python compilation
 *.so
+/__pycache__/*
+
+# result of TeX compilation
+*.aux
+*.log
+*.synctex.gz
 
 #linux trash
 .nfs*
+
+#Large Kernel-Files
+*.ker

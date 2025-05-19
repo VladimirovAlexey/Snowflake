@@ -136,7 +136,7 @@ evolutionOddPrepared=.false.
 if(showINI) then
     write(*,*) "SnowFlake parameters:"
     write(*,'("Grid size = (",I4," x",I4,") = ",I8, " nodes.")') NUM_RHO,NUM_PHI,NUM_TOT
-    write(*,'(A)',advance="no") "Include Chiral-odd evolution:"
+    write(*,'(A)',advance="no") "Include Chiral-even evolution:"
     if(IncludeChiralEvenEvolution) then
         write(*,*) color(" YES",c_green)
     else
@@ -1507,6 +1507,12 @@ SELECT CASE(f)
     CASE(5)
         functionD1=(Bplus(t_low,:)-Bminus(t_low,:))/2
         functionD2=(Bplus(t_low2,:)-Bminus(t_low2,:))/2
+    CASE(11) !!! u-d
+        functionD1=(Uplus(t_low,:)-Uminus(t_low,:)-Dplus(t_low,:)+Dminus(t_low,:))/2
+        functionD2=(Uplus(t_low2,:)-Uminus(t_low2,:)-Dplus(t_low2,:)+Dminus(t_low2,:))/2
+    CASE(12) !!! u+d
+        functionD1=(Uplus(t_low,:)-Uminus(t_low,:)+Dplus(t_low,:)-Dminus(t_low,:))/2
+        functionD2=(Uplus(t_low2,:)-Uminus(t_low2,:)+Dplus(t_low2,:)-Dminus(t_low2,:))/2
     CASE(100)!!! proton
         !!!!!! the D=eq^2/2*(Sp-Sm)
         functionD1=&
@@ -1524,6 +1530,14 @@ SELECT CASE(f)
         functionD2=&
             2*(Dplus(t_low2,:)+Cplus(t_low2,:)-Dminus(t_low2,:)-Cminus(t_low2,:))/9 &
             +(Uplus(t_low2,:)+Splus(t_low2,:)+Bplus(t_low2,:)-Uminus(t_low2,:)-Sminus(t_low2,:)-Bminus(t_low2,:))/18
+    CASE(102)!!! deutron=(p+n)/2
+        functionD1=&
+            5*(Dplus(t_low,:)+Cplus(t_low,:)-Dminus(t_low,:)-Cminus(t_low,:) &
+            +Uplus(t_low,:)+Splus(t_low,:)+Bplus(t_low,:)-Uminus(t_low,:)-Sminus(t_low,:)-Bminus(t_low,:))/36
+
+        functionD2=&
+            5*(Dplus(t_low2,:)+Cplus(t_low2,:)-Dminus(t_low2,:)-Cminus(t_low2,:) &
+            +Uplus(t_low2,:)+Splus(t_low2,:)+Bplus(t_low2,:)-Uminus(t_low2,:)-Sminus(t_low2,:)-Bminus(t_low2,:))/36
     CASE DEFAULT
         write(*,*) ErrorString("D2 routine: unknown flavor"," ")
         write(*,*) "f=",f
@@ -1565,6 +1579,7 @@ end subroutine G2_List
 
 !!!! compute the D2 Moment from the stored projection matrix
 !!!! f=flavor, it. could be 1:5 (for individial flavors; gluon-undefined) or 100=proton, 101=neutron [u<->d]
+!!!! The function d2 is 6\int dx x^2 g_2 (the factor 6 IS NOT in the matrix M)
 function D2(Q,f)
 real(dp)::D2
 integer,intent(in)::f
@@ -1595,38 +1610,54 @@ t_low2=t_low+1
 
 SELECT CASE(f)
     CASE(1)
-        !!!!D=1/4*(Sp-Sm)
-        functionD1=(Dplus(t_low,:)-Dminus(t_low,:))/4
-        functionD2=(Dplus(t_low2,:)-Dminus(t_low2,:))/4
+        !!!!D=3*(Sp-Sm)
+        functionD1=(Dplus(t_low,:)-Dminus(t_low,:))*3
+        functionD2=(Dplus(t_low2,:)-Dminus(t_low2,:))*3
     CASE(2)
-        functionD1=(Uplus(t_low,:)-Uminus(t_low,:))/4
-        functionD2=(Uplus(t_low2,:)-Uminus(t_low2,:))/4
+        functionD1=(Uplus(t_low,:)-Uminus(t_low,:))*3
+        functionD2=(Uplus(t_low2,:)-Uminus(t_low2,:))*3
     CASE(3)
-        functionD1=(Splus(t_low,:)-Sminus(t_low,:))/4
-        functionD2=(Splus(t_low2,:)-Sminus(t_low2,:))/4
+        functionD1=(Splus(t_low,:)-Sminus(t_low,:))*3
+        functionD2=(Splus(t_low2,:)-Sminus(t_low2,:))*3
     CASE(4)
-        functionD1=(Cplus(t_low,:)-Cminus(t_low,:))/4
-        functionD2=(Cplus(t_low2,:)-Cminus(t_low2,:))/4
+        functionD1=(Cplus(t_low,:)-Cminus(t_low,:))*3
+        functionD2=(Cplus(t_low2,:)-Cminus(t_low2,:))*3
     CASE(5)
-        functionD1=(Bplus(t_low,:)-Bminus(t_low,:))/4
-        functionD2=(Bplus(t_low2,:)-Bminus(t_low2,:))/4
+        functionD1=(Bplus(t_low,:)-Bminus(t_low,:))*3
+        functionD2=(Bplus(t_low2,:)-Bminus(t_low2,:))*3
+    CASE(11) !!! u-d
+        !!!!D=3*(Sp-Sm)
+        functionD1=(Uplus(t_low,:)-Uminus(t_low,:)-Dplus(t_low,:)+Dminus(t_low,:))*3
+        functionD2=(Uplus(t_low2,:)-Uminus(t_low2,:)-Dplus(t_low2,:)+Dminus(t_low2,:))*3
+    CASE(12) !!! u+d
+        !!!!D=3*(Sp-Sm)
+        functionD1=(Dplus(t_low,:)-Dminus(t_low,:)+Uplus(t_low,:)-Uminus(t_low,:))*3
+        functionD2=(Dplus(t_low2,:)-Dminus(t_low2,:)+Uplus(t_low2,:)-Uminus(t_low2,:))*3
     CASE(100)!!! proton
-        !!!!!! the D=eq^2/2*(Sp-Sm)
+        !!!!!! the D=eq^2*3*(Sp-Sm)
         functionD1=&
-            2*(Uplus(t_low,:)+Cplus(t_low,:)-Uminus(t_low,:)-Cminus(t_low,:))/9 &
-            +(Dplus(t_low,:)+Splus(t_low,:)+Bplus(t_low,:)-Dminus(t_low,:)-Sminus(t_low,:)-Bminus(t_low,:))/18
+            (Uplus(t_low,:)+Cplus(t_low,:)-Uminus(t_low,:)-Cminus(t_low,:))*4/3 &
+            +(Dplus(t_low,:)+Splus(t_low,:)+Bplus(t_low,:)-Dminus(t_low,:)-Sminus(t_low,:)-Bminus(t_low,:))/3
 
         functionD2=&
-            2*(Uplus(t_low2,:)+Cplus(t_low2,:)-Uminus(t_low2,:)-Cminus(t_low2,:))/9 &
-            +(Dplus(t_low2,:)+Splus(t_low2,:)+Bplus(t_low2,:)-Dminus(t_low2,:)-Sminus(t_low2,:)-Bminus(t_low2,:))/18
+            1*(Uplus(t_low2,:)+Cplus(t_low2,:)-Uminus(t_low2,:)-Cminus(t_low2,:))*4/3 &
+            +(Dplus(t_low2,:)+Splus(t_low2,:)+Bplus(t_low2,:)-Dminus(t_low2,:)-Sminus(t_low2,:)-Bminus(t_low2,:))/3
     CASE(101)!!! neutron = proton[u<->d]
         functionD1=&
-            2*(Dplus(t_low,:)+Cplus(t_low,:)-Dminus(t_low,:)-Cminus(t_low,:))/9 &
-            +(Uplus(t_low,:)+Splus(t_low,:)+Bplus(t_low,:)-Uminus(t_low,:)-Sminus(t_low,:)-Bminus(t_low,:))/18
+            1*(Dplus(t_low,:)+Cplus(t_low,:)-Dminus(t_low,:)-Cminus(t_low,:))*4/3 &
+            +(Uplus(t_low,:)+Splus(t_low,:)+Bplus(t_low,:)-Uminus(t_low,:)-Sminus(t_low,:)-Bminus(t_low,:))/3
 
         functionD2=&
-            2*(Dplus(t_low2,:)+Cplus(t_low2,:)-Dminus(t_low2,:)-Cminus(t_low2,:))/9 &
-            +(Uplus(t_low2,:)+Splus(t_low2,:)+Bplus(t_low2,:)-Uminus(t_low2,:)-Sminus(t_low2,:)-Bminus(t_low2,:))/18
+            1*(Dplus(t_low2,:)+Cplus(t_low2,:)-Dminus(t_low2,:)-Cminus(t_low2,:))*4/3 &
+            +(Uplus(t_low2,:)+Splus(t_low2,:)+Bplus(t_low2,:)-Uminus(t_low2,:)-Sminus(t_low2,:)-Bminus(t_low2,:))/3
+    CASE(102)!!! deutron = (p+n)/2
+        functionD1=&
+            (Dplus(t_low,:)+Cplus(t_low,:)-Dminus(t_low,:)-Cminus(t_low,:) &
+            +Uplus(t_low,:)+Splus(t_low,:)+Bplus(t_low,:)-Uminus(t_low,:)-Sminus(t_low,:)-Bminus(t_low,:))*5/6
+
+        functionD2=&
+            (Dplus(t_low2,:)+Cplus(t_low2,:)-Dminus(t_low2,:)-Cminus(t_low2,:) &
+            +Uplus(t_low2,:)+Splus(t_low2,:)+Bplus(t_low2,:)-Uminus(t_low2,:)-Sminus(t_low2,:)-Bminus(t_low2,:))*5/6
     CASE DEFAULT
         write(*,*) ErrorString("D2 routine: unknown flavor"," ")
         write(*,*) "f=",f

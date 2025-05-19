@@ -11,6 +11,7 @@
 !!!! This subroutine computes the kernel-matrix for D2-moment
 !!!! and stores it into the matrix M.
 !!!! The computation is done for the already computed matrix G2matrix
+!!!! the definition used here \int_0^1 dx x^2 g2[x]
 subroutine PreComputeMatrixD2(M,G2matrix)
 real(dp), dimension(0:NUM_TOT)::M
 real(dp), dimension(0:NUM_RHO,0:NUM_TOT), intent(in)::G2matrix

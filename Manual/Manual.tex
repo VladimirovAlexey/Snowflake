@@ -288,20 +288,35 @@ The corresponding functions are
 \texttt{G2(x,Q,f)},\qquad \texttt{D2(Q,f)}.
 \end{center}
 
-The integer $f$ is defined as 
-$$1\leftrightarrow d,\qquad 2\leftrightarrow u,\qquad 3\leftrightarrow s,\qquad 4\leftrightarrow c,\qquad 5\leftrightarrow b
-,\qquad 100\leftrightarrow p,\qquad 101\leftrightarrow n$$
-where for p(proton)
-\begin{eqnarray}
-\bar g_{2,p}(x,Q)=\frac{4}{9}\(\bar g_{2,u}(x,Q)+\bar g_{2,c}(x,Q)\)+\frac{1}{9}\(\bar g_{2,d}(x,Q)+\bar g_{2,s}(x,Q)+\bar g_{2,b}(x,Q)\)
+The integer $f$ specifies the target and is defined via the following table
+\begin{longtable}{||c|c|p{12cm}||}
+\texttt{f} & target & Description
 \\
-d_{2,p}(x,Q)=\frac{4}{9}\(d_{2,u}(x,Q)+d_{2,c}(x,Q)\)+\frac{1}{9}\(d_{2,d}(x,Q)+d_{2,s}(x,Q)+d_{2,b}(x,Q)\).
+\hline\hline
+1, 2, 3, 4, 5 & d, u, s, c, b & 
+\\\hline
+11 & u-d & 
+\\\hline
+12 & u+d & 
+\\\hline
+100 & p & \begin{eqnarray}\nn
+\bar g_{2,p}&=&\frac{4}{9}\(\bar g_{2,u}+\bar g_{2,c}(x,Q)\)+\frac{1}{9}\(\bar g_{2,d}+\bar g_{2,s}+\bar g_{2,b}\)
+\\\nn
+d_{2,p}(x,Q)&=&\frac{4}{9}\(d_{2,u}+d_{2,c}\)+\frac{1}{9}\(d_{2,d}+d_{2,s}(x,Q)+d_{2,b}\).
 \end{eqnarray}
-For n(neutron) the u and d quarks are exchaged, ie.
-\begin{eqnarray}
-\bar g_{2,n}(x,Q)=\frac{4}{9}\(\bar g_{2,d}(x,Q)+\bar g_{2,c}(x,Q)\)+\frac{1}{9}\(\bar g_{2,u}(x,Q)+\bar g_{2,s}(x,Q)+\bar g_{2,b}(x,Q)\)
-\\
-d_{2,n}(x,Q)=\frac{4}{9}\(d_{2,d}(x,Q)+d_{2,c}(x,Q)\)+\frac{1}{9}\(d_{2,u}(x,Q)+d_{2,s}(x,Q)+d_{2,b}(x,Q)\).
+\\\hline
+101 & n & \begin{eqnarray}\nn
+\bar g_{2,n}&=&\frac{4}{9}\(\bar g_{2,d}+\bar g_{2,c}\)+\frac{1}{9}\(\bar g_{2,u}+\bar g_{2,s}+\bar g_{2,b}\)
+\\\nn
+d_{2,n}&=&\frac{4}{9}\(d_{2,d}+d_{2,c}\)+\frac{1}{9}\(d_{2,u}+d_{2,s}+d_{2,b}\).
 \end{eqnarray}
+\\\hline
+102 & d=$\frac{p+n}{2}$ & \begin{eqnarray}\nn
+\bar g_{2,d}&=&\frac{5}{18}\(\bar g_{2,d}+\bar g_{2,c}+\bar g_{2,u}+\bar g_{2,s}+\bar g_{2,b}\)
+\\\nn
+d_{2,d}&=&\frac{5}{18}\(d_{2,d}+d_{2,c}+d_{2,u}+d_{2,s}+d_{2,b}\).
+\end{eqnarray}
+\\\hline\hline
+\end{longtable}
 
 \end{document}

@@ -44,18 +44,6 @@ do n=0,NUM_RHO
 end do
 !$OMP END PARALLEL DO
 
-! !!!!! at this point the matrix of G is computed.
-! !!!!! next Apply the derivative matrix
-! do n=0,NUM_TOT
-!     !!! since the derivative matrix is applied to grid, I make unit vector
-!     Hinter=0._dp
-!     Hinter(n)=1._dp
-!     !!! minus, because the derivative with respect to dx3=-dx2
-!     Dvector=-Dgrid_dX2(Hinter)
-!     !!! Multiply
-!     M(:,n)=MATMUL(Minit, Dvector)
-! end do
-
 end subroutine PreComputeMatrixG2
 
 !!!! multiplies the matrix of G2``vector'' F (0... NUM_TOT)
@@ -77,12 +65,17 @@ end function G2xF
 
 
 !!!! Each kernel G2_{n}(x) is a function of n (grid-interpolator-number), and x (at which x it is computed)
+!!!! -------------
+!!!! Definition of G2 is the following
+!!!! 1/2*\int I' (1/z1z3+1/z3(z1+z3)+1/z1(z1+z3))
+!!!! where each term has its own integration region. I' is derivative of the interpolation function
 function G2_projM(n,x)
 integer,intent(in)::n
 real(dp),intent(in)::x
 real(dp)::G2_projM
 
-G2_projM=G2_0(n,x)+G2_1(n,x)+G2_2(n,x)+G2_3(n,x)+G2_4(n,x)+G2_5(n,x)
+G2_projM=(G2_0(n,x)+G2_1(n,x)+G2_2(n,x))/2
+!G2_projM=G2_0(n,x)+G2_1(n,x)+G2_2(n,x)+G2_3(n,x)+G2_4(n,x)+G2_5(n,x)
 !G2_projM=G2_1(n,x)
 
 !

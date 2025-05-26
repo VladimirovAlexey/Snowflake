@@ -568,7 +568,8 @@ call ReadMatrix(G2matrix,trim(path)//trim("G2.ker"))
 
 if(allocated(D2matrix)) deallocate(D2matrix)
 allocate(D2matrix(0:NUM_TOT))
-call PreComputeMatrixD2(D2matrix,G2matrix)
+call Read1DMatrix(D2matrix,trim(path)//trim("D2.ker"))
+!call PreComputeMatrixD2(D2matrix,G2matrix)
 
 ! !!!!!
 ! write(*,*) ErrorString("DO NOT FOGET TO REMOVE IT!"," ")

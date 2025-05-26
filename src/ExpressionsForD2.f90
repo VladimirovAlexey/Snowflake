@@ -11,7 +11,7 @@
 !!!! This subroutine computes the kernel-matrix for D2-moment
 !!!! and stores it into the matrix M.
 !!!! The computation is done for the already computed matrix G2matrix
-!!!! the definition used here \int_0^1 dx x^2 g2[x]
+!!!! the definition used here 3*\int_0^1 dx x^2 g2[x]
 subroutine PreComputeMatrixD2(M,G2matrix)
 real(dp), dimension(0:NUM_TOT)::M
 real(dp), dimension(0:NUM_RHO,0:NUM_TOT), intent(in)::G2matrix
@@ -31,7 +31,7 @@ function f_d2(z3)
 real(dp)::f_d2
 real(dp),intent(in)::z3
 
-f_d2=GETinterpolatorRHO(n,z3)*z3**2
+f_d2=3._dp*GETinterpolatorRHO(n,z3)*z3**2
 
 end function f_d2
 

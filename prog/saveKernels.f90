@@ -12,7 +12,7 @@ real*8::t1,t2
 !$ real*8::omp_get_wtime
 
 !------------------------------------------------------
-! ! !!!! initialize the Snowflake with particular ini file
+! ! ! !!!! initialize the Snowflake with particular ini file
 ! call  SnowFlake_Initialize("kernels16x8.ini","prog/")
 !
 ! call cpu_time(t1)
@@ -22,7 +22,7 @@ real*8::t1,t2
 !
 ! call ReadKernels("kernels/16x8/")
 
-!------------------------------------------------------
+! !------------------------------------------------------
 ! ! initialize the Snowflake with particular ini file
 ! call  SnowFlake_Initialize("kernels24x12.ini","prog/")
 !
@@ -33,7 +33,7 @@ real*8::t1,t2
 !
 ! call ReadKernels("kernels/24x12/")
 
-! !------------------------------------------------------
+!------------------------------------------------------
 ! ! initialize the Snowflake with particular ini file
 call  SnowFlake_Initialize("kernels25x20.ini","prog/")
 
@@ -43,7 +43,7 @@ call SaveKernels("kernels/25x20/")
 
 
 call ReadKernels("kernels/25x20/")
-!------------------------------------------------------
+! !------------------------------------------------------
 
 call cpu_time(t2)
 !$ t2=omp_get_wtime()

@@ -5,27 +5,27 @@ python module pysnowflake
 interface
 
 
-module pysnowflake ! in /data/WorkingFiles/Twist3/Snowflake2/PySnowflake/PySnowflake.f90
+module pysnowflake ! in /data/WorkingFiles/Twist3/Snowflake/PySnowflake/PySnowflake.f90
     use snowflake
     use snowflake_model
-    subroutine initialize(file) ! in /data/WorkingFiles/Twist3/Snowflake2/PySnowflake/PySnowflake.f90:pysnowflake
+    subroutine initialize(file) ! in /data/WorkingFiles/Twist3/Snowflake/PySnowflake/PySnowflake.f90:pysnowflake
         character*(*) :: file
     end subroutine initialize
-    subroutine updateevolutiontable(mu0,mu1) ! in /data/WorkingFiles/Twist3/Snowflake2/PySnowflake/PySnowflake.f90:pysnowflake
+    subroutine updateevolutiontable(mu0,mu1) ! in /data/WorkingFiles/Twist3/Snowflake/PySnowflake/PySnowflake.f90:pysnowflake
         real*8 intent(in) :: mu0
         real*8 intent(in) :: mu1
     end subroutine updateevolutiontable
-    subroutine updatenpparameters(lambdain) ! in /data/WorkingFiles/Twist3/Snowflake2/PySnowflake/PySnowflake.f90:pysnowflake
+    subroutine updatenpparameters(lambdain) ! in /data/WorkingFiles/Twist3/Snowflake/PySnowflake/PySnowflake.f90:pysnowflake
         real*8 dimension(:),intent(in) :: lambdain
     end subroutine updatenpparameters
-    function snowflake_g2_list(x,q,f,listlength) ! in /data/WorkingFiles/Twist3/Snowflake2/PySnowflake/PySnowflake.f90:pysnowflake
+    function snowflake_g2_list(x,q,f,listlength) ! in /data/WorkingFiles/Twist3/Snowflake/PySnowflake/PySnowflake.f90:pysnowflake
         real*8 dimension(:),intent(in) :: x
         real*8 dimension(:),intent(in) :: q
         integer dimension(:),intent(in) :: f
         integer intent(in) :: listlength
         real*8 dimension(listlength) :: snowflake_g2_list
     end function snowflake_g2_list
-    function snowflake_d2_list(q,f,listlength) ! in /data/WorkingFiles/Twist3/Snowflake2/PySnowflake/PySnowflake.f90:pysnowflake
+    function snowflake_d2_list(q,f,listlength) ! in /data/WorkingFiles/Twist3/Snowflake/PySnowflake/PySnowflake.f90:pysnowflake
         real*8 dimension(:),intent(in) :: q
         integer dimension(:),intent(in) :: f
         integer intent(in) :: listlength

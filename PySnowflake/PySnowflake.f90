@@ -22,7 +22,9 @@ end subroutine Initialize
 subroutine UpdateEvolutionTable(mu0,mu1)
 real*8,intent(in)::mu0,mu1
 
-call ComputeEvolution(mu0,mu1,alpha,U1=Tu,D1=Td,S1=Ts,U2=dTu,D2=dTd,S2=dTs,G1=Tp,G2=Tm,inputQ="T",inputG="T")
+!call ComputeEvolution(mu0,mu1,alpha,U1=Tu,D1=Td,S1=Ts,U2=dTu,D2=dTd,S2=dTs,G1=Tp,G2=Tm,inputQ="T",inputG="T")
+call ComputeEvolution(mu0,mu1,alpha,U1=SplusU,D1=SplusD,S1=SplusR,U2=SminusU,D2=SminusD,S2=SminusR,G1=Tp,G2=Tm,&
+    inputQ="C",inputG="T")
 
 end subroutine UpdateEvolutionTable
 

@@ -11,7 +11,10 @@ real(dp),allocatable,dimension(:)::NPparam
 
 public::SnowFlake_Model_Initialize,SetNPparameters
 
-public::alpha,Tu,Td,Ts,dTu,dTd,dTs,Tp,Tm
+public::alpha
+!public::Tu,Td,Ts,dTu,dTd,dTs
+public::SplusU,SplusD,SplusR,SminusU,SminusD,SminusR
+public::Tp,Tm
 
 contains
 
@@ -56,74 +59,152 @@ function H(x,y,a,b)
     end if
 end function H
 
-!!!! function T_u
-function Tu(x,y)
+!!!! function S^+_u
+function SplusU(x,y)
     real*8,intent(in)::x,y
-    real*8::Tu
+    real*8::SplusU
     real*8,parameter::pi=3.141592653589793d0
 
     if(abs(x)<1 .and. abs(y)<1 .and. abs(x+y)<1) then
-        Tu=NPparam(2)*H(x,y,NPparam(0),NPparam(1))*(1.d0+NPparam(3)*(2*x+y))
+        SplusU=H(x,y,NPparam(0),NPparam(0))*(NPparam(2)+NPparam(3)*x*(-x-y))
     else
-        Tu=0.d0
+        SplusU=0.d0
     end if
-end function Tu
+end function SplusU
 
-!!!! function T_d
-function Td(x,y)
+!!!! function S^-_u
+function SminusU(x,y)
     real*8,intent(in)::x,y
-    real*8::Td
+    real*8::SminusU
     real*8,parameter::pi=3.141592653589793d0
 
     if(abs(x)<1 .and. abs(y)<1 .and. abs(x+y)<1) then
-        Td=NPparam(8)*H(x,y,NPparam(0),NPparam(1))*(1.d0+NPparam(9)*(2*x+y))
+        SminusU=H(x,y,NPparam(0),NPparam(0))*(NPparam(4)*x+NPparam(5)*(-x-y))
     else
-        Td=0.d0
+        SminusU=0.d0
     end if
-end function Td
+end function SminusU
 
-!!!! function T_s
-function Ts(x,y)
+!!!! function S^+_d
+function SplusD(x,y)
     real*8,intent(in)::x,y
-    real*8::Ts
-
-    Ts=NPparam(14)*H(x,y,NPparam(0),NPparam(1))
-end function Ts
-
-!!!! function Delta T_u
-function dTu(x,y)
-    real*8,intent(in)::x,y
-    real*8::dTu
+    real*8::SplusD
     real*8,parameter::pi=3.141592653589793d0
 
     if(abs(x)<1 .and. abs(y)<1 .and. abs(x+y)<1) then
-        dTu=NPparam(5)*H(x,y,NPparam(0),NPparam(1))*(1.d0+NPparam(6)*(2*x+y))*y
+        SplusD=H(x,y,NPparam(0),NPparam(0))*(NPparam(6)+NPparam(7)*x*(-x-y))
     else
-        dTu=0.d0
+        SplusD=0.d0
     end if
-end function dTu
+end function SplusD
 
-!!!! function Delta T_d
-function dTd(x,y)
+!!!! function S^-_d
+function SminusD(x,y)
     real*8,intent(in)::x,y
-    real*8::dTd
+    real*8::SminusD
     real*8,parameter::pi=3.141592653589793d0
 
     if(abs(x)<1 .and. abs(y)<1 .and. abs(x+y)<1) then
-        dTd=NPparam(11)*H(x,y,NPparam(0),NPparam(1))*(1.d0+NPparam(12)*(2*x+y))*y
+        SminusD=H(x,y,NPparam(0),NPparam(0))*(NPparam(8)*x+NPparam(9)*(-x-y))
     else
-        dTd=0.d0
+        SminusD=0.d0
     end if
-end function dTd
+end function SminusD
 
-!!!! function Delta T_s
-function dTs(x,y)
+!!!! function S^+_d
+function SplusR(x,y)
     real*8,intent(in)::x,y
-    real*8::dTs
+    real*8::SplusR
+    real*8,parameter::pi=3.141592653589793d0
 
-    dTs=NPparam(14)*H(x,y,NPparam(0),NPparam(1))*y
-end function dTs
+    if(abs(x)<1 .and. abs(y)<1 .and. abs(x+y)<1) then
+        SplusR=H(x,y,NPparam(0),NPparam(0))*NPparam(10)
+    else
+        SplusR=0.d0
+    end if
+end function SplusR
 
+!!!! function S^-_d
+function SminusR(x,y)
+    real*8,intent(in)::x,y
+    real*8::SminusR
+    real*8,parameter::pi=3.141592653589793d0
+
+    if(abs(x)<1 .and. abs(y)<1 .and. abs(x+y)<1) then
+        SminusR=H(x,y,NPparam(0),NPparam(0))*NPparam(11)*y
+    else
+        SminusR=0.d0
+    end if
+end function SminusR
+
+! !!!! function T_u
+! function Tu(x,y)
+!     real*8,intent(in)::x,y
+!     real*8::Tu
+!     real*8,parameter::pi=3.141592653589793d0
+!
+!     if(abs(x)<1 .and. abs(y)<1 .and. abs(x+y)<1) then
+!         Tu=NPparam(2)*H(x,y,NPparam(0),NPparam(1))*(1.d0+NPparam(3)*(2*x+y))
+!     else
+!         Tu=0.d0
+!     end if
+! end function Tu
+!
+! !!!! function T_d
+! function Td(x,y)
+!     real*8,intent(in)::x,y
+!     real*8::Td
+!     real*8,parameter::pi=3.141592653589793d0
+!
+!     if(abs(x)<1 .and. abs(y)<1 .and. abs(x+y)<1) then
+!         Td=NPparam(8)*H(x,y,NPparam(0),NPparam(1))*(1.d0+NPparam(9)*(2*x+y))
+!     else
+!         Td=0.d0
+!     end if
+! end function Td
+!
+! !!!! function T_s
+! function Ts(x,y)
+!     real*8,intent(in)::x,y
+!     real*8::Ts
+!
+!     Ts=NPparam(14)*H(x,y,NPparam(0),NPparam(1))
+! end function Ts
+!
+! !!!! function Delta T_u
+! function dTu(x,y)
+!     real*8,intent(in)::x,y
+!     real*8::dTu
+!     real*8,parameter::pi=3.141592653589793d0
+!
+!     if(abs(x)<1 .and. abs(y)<1 .and. abs(x+y)<1) then
+!         dTu=NPparam(5)*H(x,y,NPparam(0),NPparam(1))*(1.d0+NPparam(6)*(2*x+y))*y
+!     else
+!         dTu=0.d0
+!     end if
+! end function dTu
+!
+! !!!! function Delta T_d
+! function dTd(x,y)
+!     real*8,intent(in)::x,y
+!     real*8::dTd
+!     real*8,parameter::pi=3.141592653589793d0
+!
+!     if(abs(x)<1 .and. abs(y)<1 .and. abs(x+y)<1) then
+!         dTd=NPparam(11)*H(x,y,NPparam(0),NPparam(1))*(1.d0+NPparam(12)*(2*x+y))*y
+!     else
+!         dTd=0.d0
+!     end if
+! end function dTd
+!
+! !!!! function Delta T_s
+! function dTs(x,y)
+!     real*8,intent(in)::x,y
+!     real*8::dTs
+!
+!     dTs=NPparam(14)*H(x,y,NPparam(0),NPparam(1))*y
+! end function dTs
+!
 !!!! function T_{3F}^+
 function Tp(x,y)
     real*8,intent(in)::x,y

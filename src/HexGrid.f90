@@ -35,7 +35,7 @@ public::Initialize_HexGrid
 public::RP_fromX12,PHI_fromX
 public::get_RhoP_from_1Dindex,get_X123_from_1Dindex,getSubgrid_PHI,RhoP_fromX12,X123_fromRP
 public::get_2Dindex_from_1Dindex,subgridNUM_from_NUM_PHI
-public::GETgrid,GETinterpolation,GETinterpolatorB,GETinterpolation_RHO,GETinterpolatorB_dX2,GETinterpolatorRHO
+public::GETgrid,GETinterpolation,GETinterpolatorB,GETinterpolation_RHO,GETinterpolatorB_dX2,GETinterpolatorRHO_X
 public::interpolatorB_in_grid
 
 public::LimitsX2,LimitsX1,LimitsX3
@@ -809,22 +809,24 @@ GETinterpolation_RHO=GETinterpolation_RHO/sum(deltaT)
 end function GETinterpolation_RHO
 
 !!!!! compute the interpolator from at rho,phi of the grid that contains the point n,mG,mm
-function GETinterpolatorRHO(n,rho)
-real(dp),intent(in)::rho
+function GETinterpolatorRHO_X(n,x)
+real(dp),intent(in)::x
 integer,intent(in)::n
-real(dp)::GETinterpolatorRHO
+real(dp)::GETinterpolatorRHO_X
 
-real(dp)::t !!!! these are values of rho and phi in the subgrid space
+real(dp)::t,rho !!!! these are values of rho and phi in the subgrid space
 real(dp)::deltaT(0:NUM_RHO)
 
 integer::i
+
+rho=rho_fromR(x)
 
 !!!!!! 3) get coordinates in this subgrid
 t=1-2*rho
 
 !!!! check that the interpolator is in the grid
 if(abs(t)>1+zero) then
-    GETinterpolatorRHO=0._dp
+    GETinterpolatorRHO_X=0._dp
     return
 end if
 
@@ -835,15 +837,15 @@ deltaT=t-nodes_inRHO
 !!!!!!!!!!!!!!!!!!!!!!!! Implementation via direct product
 !!!! =(-1)^n beta_n/(2n)*prod 2(x-t_i)
 
-GETinterpolatorRHO=1.d0
+GETinterpolatorRHO_X=1.d0
 
 do i=0,NUM_RHO
     if(i==n) cycle
-    GETinterpolatorRHO=GETinterpolatorRHO*deltaT(i)*2.d0
+    GETinterpolatorRHO_X=GETinterpolatorRHO_X*deltaT(i)*2.d0
 end do
-GETinterpolatorRHO=GETinterpolatorRHO*nodeFactors_inRHO(n)/(2*NUM_RHO)
+GETinterpolatorRHO_X=GETinterpolatorRHO_X*nodeFactors_inRHO(n)/(2*NUM_RHO)
 
-end function GETinterpolatorRHO
+end function GETinterpolatorRHO_X
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!! Routines for derivatives of grids !!!!!!!!!!!!!!!!!!!!!!!

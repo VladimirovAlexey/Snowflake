@@ -406,6 +406,7 @@ end subroutine PreComputeMatrix
 !!!!!! Save Kernel into a directory
 subroutine SaveKernels(path)
 character(len=*)::path
+
 write(*,'(A)',advance="no") "Saving Hqq ..."
 call SaveKernelMatrix(Hqq,trim(path)//trim("Hqq.ker"))
 write(*,'(A)',advance="no") "Saving Hqq_J ..."
@@ -427,6 +428,7 @@ call SaveKernelMatrix(Hgg_MINUS,trim(path)//trim("Hgg_MINUS.ker"))
 if(IncludeG2Matrix) then
     write(*,'(A)',advance="no") "Saving G2 projector ..."
     call SaveMatrix(G2matrix,trim(path)//trim("G2.ker"))
+    !!!call PreComputeMatrixD2(D2matrix,G2matrix)
     write(*,'(A)',advance="no") "Saving D2 projector ..."
     call Save1DMatrix(D2matrix,trim(path)//trim("D2.ker"))
 end if

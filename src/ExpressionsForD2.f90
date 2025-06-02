@@ -31,7 +31,7 @@ function f_d2(z3)
 real(dp)::f_d2
 real(dp),intent(in)::z3
 
-f_d2=3._dp*GETinterpolatorRHO(n,z3)*z3**2
+f_d2=3._dp*GETinterpolatorRHO_X(n,z3)*z3**2
 
 end function f_d2
 
